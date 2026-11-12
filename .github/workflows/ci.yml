@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [dev, main]
+    types: [opened, reopened, synchronize, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: CI IPBOT
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validar branches do pull request
+        shell: pwsh
+        env:
+          BASE_BRANCH: ${{ github.base_ref }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPOSITORY: ${{ github.repository }}
+        run: |
+          if ($env:BASE_BRANCH -eq 'main' -and
+              ($env:HEAD_BRANCH -cne 'dev' -or $env:HEAD_REPOSITORY -ne $env:BASE_REPOSITORY)) {
+            Write-Output '::error::Abra entregas para main a partir da dev deste repositório.'
+            exit 1
+          }
+          if ($env:BASE_BRANCH -eq 'dev' -and
+              $env:HEAD_BRANCH -cnotmatch '^(feat|fix|docs|refactor|test|chore|style)/[a-z0-9]+(-[a-z0-9]+)*$') {
+            Write-Output '::error::Use <tipo>/<descricao-curta> em kebab-case nas branches para dev.'
+            exit 1
+          }
+
+      - name: Obter o merge de teste do pull request
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Conferir espaços em branco e marcadores de conflito no diff
+        run: git diff --check HEAD^1 HEAD
