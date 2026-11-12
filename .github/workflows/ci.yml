@@ -12,7 +12,7 @@ jobs:
   ci:
     name: CI IPBOT
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - name: Validar branches do pull request
         shell: pwsh
@@ -41,3 +41,41 @@ jobs:
 
       - name: Conferir espaços em branco e marcadores de conflito no diff
         run: git diff --check HEAD^1 HEAD
+
+      - name: Preparar configuração e imagens
+        run: |
+          python3 scripts/init_env.py
+          docker compose config --quiet
+          docker compose build
+
+      - name: Aplicar e reverter migrações em banco descartável
+        run: |
+          docker compose up -d db
+          docker compose run --rm migrate
+          docker compose run --rm --no-deps migrate alembic -c backend/alembic.ini downgrade base
+          docker compose run --rm --no-deps migrate alembic -c backend/alembic.ini upgrade head
+
+      - name: Validar backend e ingestão com PostgreSQL
+        run: |
+          docker compose run --rm --no-deps api ruff check backend
+          docker compose run --rm --no-deps api ruff format --check backend
+          docker compose run --rm --no-deps api pytest backend/tests
+
+      - name: Validar contratos e build React
+        run: |
+          docker compose run --rm --no-deps api python -m app.export_contracts > /tmp/ipbot-openapi.json
+          cmp packages/contracts/openapi.json /tmp/ipbot-openapi.json
+          docker compose run --rm --no-deps frontend npm run contracts:generate
+          git diff --exit-code -- packages/contracts
+          docker compose run --rm --no-deps frontend npm run build
+
+      - name: Verificar saúde dos serviços
+        run: docker compose up -d --wait --wait-timeout 120
+
+      - name: Logs em caso de falha
+        if: failure()
+        run: docker compose logs --no-color --tail 100
+
+      - name: Encerrar ambiente descartável
+        if: always()
+        run: docker compose down -v --remove-orphans
