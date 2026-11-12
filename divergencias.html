@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IPBOT | Divergência entre fontes</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: "Source Sans 3", system-ui, sans-serif;
+      color: #172b3a;
+      background: #edf3f5;
+      line-height: 1.6;
+    }
+    body { margin: 0; }
+    header { background: #17394b; color: #fff; }
+    header div, main { width: min(46rem, calc(100% - 2rem)); margin: auto; }
+    header div { padding-block: 1rem; }
+    main { padding-block: 2rem; }
+    h1, h2, p { margin-block: 0 .7rem; }
+    h1 { line-height: 1.15; font-size: clamp(2rem, 6vw, 3rem); }
+    h2 { font-size: 1.25rem; }
+    section { margin-top: 1.25rem; padding: 1.25rem; background: #fff; border: 1px solid #b8cbd4; }
+    summary { cursor: pointer; color: #165d66; font-weight: 650; }
+    details > p, blockquote { margin: .75rem 0 0; }
+    blockquote { padding-inline-start: 1rem; border-inline-start: .25rem solid #165d66; }
+    cite { display: block; font-style: normal; }
+    :focus-visible { outline: 2px solid #165d66; outline-offset: 4px; }
+  </style>
+</head>
+<body>
+  <header><div><strong>IPBOT</strong></div></header>
+  <main>
+    <p><a href="index.html">Voltar à consulta documental</a></p>
+    <h1>Divergência entre fontes</h1>
+    <p>Demonstração estática com duas fontes sintéticas sobre renovação de serviços.</p>
+
+    <section aria-labelledby="consulta">
+      <h2 id="consulta">Qual é o prazo para renovar este contrato?</h2>
+      <p>O contrato indica 30 dias corridos de antecedência. O termo aditivo indica 45 dias corridos.</p>
+      <p>Confira a vigência do aditivo antes de definir o prazo aplicável.</p>
+    </section>
+
+    <section aria-labelledby="fontes">
+      <h2 id="fontes">Fontes consultadas</h2>
+      <details>
+        <summary>Contrato de prestação de serviços · 30 dias corridos</summary>
+        <blockquote>
+          “A parte interessada deverá solicitar a renovação por escrito com antecedência mínima de 30 dias corridos do término da vigência.”
+          <cite>Contrato de prestação de serviços, versão 1.0, cláusula 8.2</cite>
+        </blockquote>
+      </details>
+      <details>
+        <summary>Primeiro termo aditivo · 45 dias corridos</summary>
+        <blockquote>
+          “A solicitação de renovação deverá ser apresentada por escrito com antecedência mínima de 45 dias corridos do término da vigência.”
+          <cite>Primeiro termo aditivo, versão 1.0, cláusula 2.1</cite>
+        </blockquote>
+      </details>
+    </section>
+  </main>
+</body>
+</html>
