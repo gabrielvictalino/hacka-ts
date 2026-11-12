@@ -59,7 +59,7 @@ O regulamento anexado ao plano exige MVP funcional e original, ausência de cust
 Os nomes de rotas, a estratégia de busca e as estruturas abaixo orientam a próxima rodada.
 
 1. O React apresenta Biblioteca e Consulta. A consulta tem seletor de tema, resposta, síntese e painel de evidência reutilizável. O painel apresenta o trecho e abre o PDF na página citada.
-2. A FastAPI valida o upload, guarda o original e extrai texto por página. Identifica código, versão, tipo, fase, datas e vínculos quando declarados. Valores não identificados ficam explícitos na biblioteca e não são inferidos pelo nome do arquivo.
+2. A FastAPI valida o upload, guarda o original e enfileira o processamento. O worker extrai texto por página e identifica código, versão, tipo, fase, datas e vínculos quando declarados. Valores não identificados ficam explícitos na biblioteca e não são inferidos pelo nome do arquivo.
 3. O PostgreSQL persiste tema, documento, versão, páginas e trechos. A busca é textual em português e restrita ao tema, com correspondência exata de códigos, datas e termos para complementar o ranqueamento. Uma consulta recupera também versões relacionadas e passagens potencialmente divergentes quando necessárias ao cenário.
 4. A camada de resposta devolve afirmações ou trechos e citações estruturadas. O modo extrativo usa passagens do acervo e sinaliza lacunas. Se configurada e disponível, a geração recebe a pergunta e as evidências recuperadas. Os PDFs são dados de consulta, inclusive quando contêm texto no imperativo. O backend controla as fontes elegíveis, verifica a saída e decide como exibir lacunas. [Decisão sobre a consulta local e a geração opcional](adr/0001-consulta-local-com-geracao-opcional.md).
 5. Na execução local, os PDFs podem ficar em armazenamento local e os metadados no PostgreSQL. A integração AWS deverá manter o contrato de evidências. Serviço de armazenamento, modelo, credenciais e recursos AWS seguem condicionados à disponibilidade e à decisão de integração.
@@ -83,7 +83,7 @@ A análise semântica opcional recebe os trechos já recuperados pela busca text
 | --- | --- | --- |
 | `GET /api/topics` | — | Temas disponíveis com identificador e nome |
 | `GET /api/documents?topic_id=…` | Tema | Versões, metadados e estado de processamento |
-| `POST /api/documents` | PDF e tema, via multipart | Identificador da versão e estado. Resposta legível para arquivo não aceito ou duplicado |
+| `POST /api/documents` | PDF e tema, via multipart | `202 Accepted` após aceitar o processamento, com identificadores da versão e do job e estado. Resposta legível para arquivo não aceito ou duplicado |
 | `GET /api/documents/{version_id}/file` | Identificador da versão | PDF original correspondente à citação |
 | `POST /api/questions` | Tema, pergunta e data de referência opcional | Modo de resposta, estado, data efetiva, afirmações ou trechos com citações, lacunas e divergências |
 | `POST /api/summaries` | Tema e data de referência opcional | Itens com categoria, obrigação ou prazo, responsável quando explícito e citações |
@@ -94,6 +94,8 @@ A análise semântica opcional recebe os trechos já recuperados pela busca text
 - Preservar o PDF associado a cada versão, inclusive após entrada de uma sucessora. Uma citação já exibida precisa continuar resolvendo a mesma página.
 
 ## Demonstração e evolução
+
+A execução na janela de menos de nove horas segue o [plano de entrega em 8h45](plano-entrega-9h-ipbot.md). A [especificação operacional e o plano de capacidade](spec-operacional-e-capacidade-ipbot.md) detalham a ingestão assíncrona, a segurança e a validação com até 100 usuários simultâneos.
 
 1. Enviar um PDF pesquisável, acompanhar o processamento, perguntar sobre um prazo e abrir a fonte. A prorrogação do coworking fornece um caso com prazo, parte responsável e data explícita.
 2. Consultar Férias em 12/11/2026. Mostrar a norma v3.0.0 como orientação corrente, abrir a v2.0.0 no cenário histórico e verificar a divergência sobre aviso quando a aprovação ocorre em D-32.
