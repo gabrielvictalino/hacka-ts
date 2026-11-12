@@ -203,6 +203,37 @@ def test_pdf_without_text_is_explicit():
         extract_pages(make_pdf([""]))
 
 
+def test_unsupported_text_fails_without_blocking_next_document(topic):
+    from app.db import get_engine
+
+    invalid = queue(topic, make_pdf(["Pagina valida.", "Texto com caractere nulo: \x00 fim."]))
+    valid = queue(topic, make_pdf(["Documento seguinte valido."]))
+    assert process_one()
+    assert process_one()
+    with get_engine().connect() as connection:
+        assert (
+            connection.execute(
+                text("SELECT status FROM document_versions WHERE id=:id"),
+                {"id": invalid.version_id},
+            ).scalar_one()
+            == "failed"
+        )
+        assert (
+            connection.execute(
+                text("SELECT count(*) FROM pages WHERE version_id=:id"),
+                {"id": invalid.version_id},
+            ).scalar_one()
+            == 0
+        )
+        assert (
+            connection.execute(
+                text("SELECT status FROM document_versions WHERE id=:id"),
+                {"id": valid.version_id},
+            ).scalar_one()
+            == "ready"
+        )
+
+
 def test_import_command_uses_topic_folders_and_shared_deduplication(topic, tmp_path, monkeypatch, capsys):
     import json
     import sys

@@ -100,6 +100,8 @@ def extract_pages(content: bytes) -> list[str]:
         raise
     except Exception as exc:
         raise InvalidDocument("Não foi possível ler o PDF; verifique o arquivo original.") from exc
+    if any("\x00" in page for page in pages):
+        raise InvalidDocument("PDF contém caracteres nulos no texto; gere uma nova cópia pesquisável.")
     if not pages or not any(page.strip() for page in pages):
         raise InvalidDocument("PDF sem texto extraível; OCR ainda não está disponível.")
     return pages

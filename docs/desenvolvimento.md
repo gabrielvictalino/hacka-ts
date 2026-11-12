@@ -68,6 +68,8 @@ O CLI é uma ferramenta administrativa local com acesso direto ao banco. O uploa
 
 O hash SHA-256 por tema evita duplicação, inclusive entre chamadas concorrentes. Reenviar um PDF com falha o recoloca na fila. O worker usa `FOR UPDATE SKIP LOCKED`: múltiplos workers podem compartilhar a fila e uma queda antes do commit devolve o trabalho ao estado anterior. Páginas, trechos e estado `ready` são gravados atomicamente. O estado `processing` fica na transação do worker; observadores veem `queued` até `ready` ou `failed`. Uma página vazia conserva sua posição, mas não gera trecho vazio.
 
+PDFs cujo texto extraído contém caracteres nulos são marcados como `failed` antes de gravar páginas, com orientação para gerar outra cópia pesquisável. Isso preserva o texto literal dos documentos aceitos e permite que o worker continue processando os próximos arquivos da fila.
+
 Os originais ficam no volume `documents`, por hash, e são servidos por `GET /api/documents/{version_id}/file`. Uma futura interface pode acrescentar `#page=2` ao URL para abrir uma página física. Reenvios não alteram IDs de versões já prontas nem suas citações.
 
 Esta fundação mantém `code`, `version`, tipo, camada, fase e datas como campos opcionais. A leitura automática de cabeçalhos, a associação de edições de um mesmo documento e a detecção de metadados conflitantes pertencem à evolução da ingestão. Nesta etapa cada PDF distinto recebe sua própria identidade documental; nenhuma versão ou vigência é inferida pelo nome do arquivo. Fatos curados têm estrutura persistente, mas não são criados automaticamente.
