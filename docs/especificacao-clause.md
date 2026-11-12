@@ -2,6 +2,8 @@
 
 Versão revisada de `arquitetura-clause.md`. O [plano de arquitetura](arquitetura-clause.md) descreve tecnologias, implementação, operação e deploy.
 
+Atualizada para a **identidade por SSO** (sem tela de login) e para a **priorização da entrega de 24 horas** (seção 4).
+
 ## 1. O desafio
 
 **Pergunta do desafio [Edital 8.1.2, Slides]:** como organizar, sintetizar e destacar as informações mais relevantes sob diferentes perspectivas de análise, por meio de recursos visuais, gráficos e interativos, transformando documentos e conteúdos complexos em inteligência empresarial, com respostas confiáveis e acesso rápido para apoiar a decisão.
@@ -81,36 +83,36 @@ O `FL_1111-001` vem como **código Mermaid** dentro do PDF, então o fluxograma 
 4. **Regras com cálculo.** Prazos em camadas, antecipação para o dia útil anterior, 30% de ausência arredondado para baixo (TB Tabela 4), faixas de alçada (R$ 18.000,00 vs R$ 18.000,01), multa de 5% de R$ 18.250,00 (R$ 912,50).
 5. **Cruzamentos.** A NT_2026-021 distingue R$ 96.000,00 de orçamento total e R$ 24.000,00 destinados à premiação do RG_1100. O valor do coworking (R$ 18.250,00) cai na faixa de diretor, igual nos dois documentos de locação.
 6. **Exclusões.** A NG_111 (item 4.12) diz que estagiários e aprendizes não são regidos pela norma de férias.
-7. **Conflitos entre fontes.** No cenário AC-03, a norma prevê aviso até D-35 e o procedimento prevê emissão no dia seguinte à aprovação nas condições que descreve. Mostrar as duas passagens e a precedência declarada.
+7. **Conflitos entre fontes.** No cenário AC-03, a norma prevê aviso até D-35 (NG_111, item 4.5.3) e o procedimento prevê emissão no dia seguinte à aprovação nas condições que descreve (PX_1111-001, item 8.4.2). Mostrar as duas passagens e a precedência declarada. **No MVP, este é o caso de divergência apresentado, com curadoria manual.** A detecção automática entre todos os documentos fica para a evolução (seção 7).
 
 ## 3. Comportamento do produto
 
 | ID de origem | Decisão funcional |
 | --- | --- |
-| D3 | Férias é o tema aprofundado. Inovação e Locação têm cobertura progressiva. |
+| D3 | Férias é o tema aprofundado. Inovação tem cobertura de perspectivas Prazos e Valores. Locação tem cobertura por perguntas e busca. |
 | D4 | A resposta leva à evidência. Se faltar informação, a interface explicita a lacuna. |
 | D5 | Os fatos preservam os números e as condições das fontes. |
 | D6 | Prazos, datas e valores calculados seguem regras verificáveis. |
 | D7 | A pessoa pode alternar perspectivas por tema ou prazo e filtrar por área. A jornada destaca ações por papel. |
-| D9 | O núcleo é priorizado para a demo. As extensões entram conforme a estabilidade do núcleo. |
-| D10 | A consulta oferece geração e modo extrativo. Se a geração ou a busca semântica estiver indisponível, a pessoa ainda pode pesquisar o acervo publicado e abrir as fontes. |
+| D9 | O núcleo é priorizado para a demo. As extensões entram conforme a estabilidade do núcleo. O escopo das 24 horas está na seção 4. |
+| D10 | A consulta oferece geração e modo extrativo. Se a geração de texto estiver indisponível, a pessoa ainda pode pesquisar o acervo publicado e abrir as fontes. |
 | D12 | Cada evidência identifica documento, versão, página física e trecho literal. Item ou cláusula acompanha a citação quando disponível. |
 | D13 | Consulta e Gestão têm fluxos próprios. Gestão mantém upload, versões e detalhes de divergências. |
-| D14 | A demo usa contas de teste com perfis empregado, gestor e gestão do acervo. A conta define a visão inicial. O seletor “Ver para” permite explorar as regras de outro papel. |
+| D14 | **A identidade vem do SSO da empresa, sem tela de login nem de cadastro.** A pessoa já autenticada no computador abre o produto direto. O perfil (empregado, gestor ou gestão do acervo) vem dos grupos da conta e define a visão inicial. O seletor “Ver para” permite explorar as regras de outro papel. Na demo, um **simulador de SSO** com contas de teste entrega a identidade pelo mesmo caminho e é identificado como simulação, sem valor de segurança. Se o simulador não estiver pronto a tempo, a demo usa uma conta de teste fixa. |
 | D15 | A Consulta mostra a resposta e a fonte logo abaixo. A jornada principal tem cinco passos e o fluxograma completo fica acessível por link técnico. |
-| D16 | Todo usuário autenticado pode consultar o mesmo acervo. Só o perfil de Gestão pode enviar documentos e acessar alertas completos. |
-| D17 | A equipe valida a capacidade de consulta com até 100 usuários simultâneos, incluindo o cenário com ingestão concorrente. |
+| D16 | Todo usuário identificado pode consultar o mesmo acervo. Só o perfil de Gestão pode enviar documentos e acessar alertas completos. Esta é uma **suposição**: o acervo não define restrição por cargo [A confirmar]. |
+| D17 | A equipe valida a capacidade de consulta com até 100 usuários simultâneos, incluindo o cenário com ingestão concorrente, **se houver tempo depois do núcleo**. O teste não bloqueia a demo. |
 
 | | Consulta | Gestão |
 |---|---|---|
 | Quem usa | Funcionários que querem perguntar e entender | Quem mantém o acervo |
 | Telas | Início, Resposta, Guia do assunto (jornada), Resumo | Documentos (upload em lote, versões, situação) e Alertas |
 | Vê versões e conflitos? | Só o selo "Em vigor, versão X" e o link para versões anteriores; aviso curto quando duas fontes divergem | Lista completa de versões, mudanças entre versões e divergências entre fontes |
-| Acesso | Exige entrar; todos os perfis autenticados podem consultar todos os documentos | Exige entrar com o perfil de gestão do acervo |
+| Acesso | Identidade vinda do SSO (na demo, simulada); todos os perfis identificados podem consultar todos os documentos | Identidade vinda do SSO, com o perfil de gestão do acervo |
 
 ### Perspectivas e papéis [Decisão D7]
 
-- **Controle principal:** perspectiva (Prazos, Valores, Obrigações, Riscos) + filtros por assunto e área.
+- **Controle principal:** perspectiva (Prazos, Valores, Obrigações, Riscos) + filtros por assunto e área. **No MVP, Prazos e Valores funcionam; Obrigações e Riscos aparecem como “em breve”.**
 - **Seção "ação por perfil"** dentro do guia de cada assunto: Empregado, Gestor, Diretoria/Apoio e o caso especial Estagiário/Aprendiz (exclusão do item 4.12 da NG_111). Os nomes "Diretoria/Apoio" e a divisão por perfil são criação da equipe, a partir dos papéis que os documentos descrevem.
 - **Nível de detalhe:** Resumo ou Completo.
 - **Visão inicial vs. "Ver para":** a visão inicial vem do perfil da conta. O seletor "Ver para" (Empregado, Gestor, Diretoria ou apoio, Estagiário ou aprendiz) deixa a pessoa olhar o assunto pela ótica de outro papel, com um link "Voltar à minha visão". A visão escolhida acompanha a consulta.
@@ -126,62 +128,79 @@ Não vamos implementar as 8 com a mesma profundidade. O slide permite priorizar,
 
 | # | Funcionalidade | Entrega mínima |
 |---|---|---|
-| 1 | Base e processamento | Na área de **Gestão**: upload (individual e em lote) de PDFs no formato do acervo; leitura do cabeçalho; organização por tema; lista de documentos com versão e fase |
+| 1 | Base e processamento | Na área de **Gestão**: upload (individual e em lote) de PDFs no formato do acervo; leitura do cabeçalho; organização por tema; lista de documentos com versão e fase. **Sem extração automática de fatos no MVP.** |
 | 2 | Perguntas com fonte | Resposta com documento, versão, **página**, item e trecho; "não consta" quando não houver; indicação do que ficou **sem confirmação**; validador de citações; funciona **com e sem IA** |
-| 3 + 5 | Destaques e perspectivas | Seletor de perspectiva (Prazos, Valores, Obrigações, Riscos) e filtros por assunto e área, alimentados pela tabela de fatos |
+| 3 + 5 | Destaques e perspectivas | Seletor de perspectiva e filtros por assunto e área. **No MVP: Prazos e Valores**, alimentados por fatos **curados manualmente** para Férias e para os valores de Inovação |
 | 4 | Visuais com fonte | **Jornada em 5 passos** como visual principal, gráfico de orçamento e linha do tempo; cada elemento abre o item de origem. O fluxograma completo (`FL_1111-001`) fica atrás de um link técnico |
-| 7 | Vigência, camadas, conflito | Selo de versão em vigor, aviso de versão substituída, camada da norma (NG > PX > apoio) e alerta quando duas fontes divergem |
+| 7 | Vigência, camadas, conflito | Selo de versão em vigor, aviso de versão substituída, mudança entre versões (ex.: 30 para 45 dias) e camada da norma (NG > PX > apoio). **A divergência AC-03 é apresentada com curadoria manual**; a detecção automática entre todos os documentos fica para a evolução |
 
 ### Nível 2 · Barato, se o núcleo estiver estável
 
 | # | Funcionalidade | Entrega mínima |
 |---|---|---|
-| 6 | Resumo executivo | O usuário marca fatos e gera uma página (Markdown/HTML para PDF) com as fontes. Reaproveita a tabela de fatos |
+| 6 | Resumo executivo | O usuário marca fatos e gera uma página (Markdown/HTML para PDF) com as fontes. Reaproveita os fatos curados |
 | 8 | Reaproveitamento e retorno | Botão "ajudou?" com comentário, histórico das perguntas e sugestão de perguntas parecidas por similaridade simples de palavras |
+| - | Capacidade (D17) | Teste de carga reduzido, se sobrar tempo |
 
 ### Nível 3 · Plano de 6 meses (não entra no MVP)
 
 - Mapa mental interativo completo.
 - Exportação em apresentação (PowerPoint).
+- Perspectivas Obrigações e Riscos e painel próprio de Locação.
+- Extração de fatos assistida por IA para todo o acervo e detecção automática de divergências.
 - Similaridade entre análises anteriores e aprendizado a partir das avaliações.
-- Integração com a fonte oficial de documentos.
+- Integração com a fonte oficial de documentos e com o SSO real da empresa.
+
+### Escopo da entrega nas 24 horas
+
+**Entra:** upload e leitura de cabeçalho; perguntas com fonte, versão, página e trecho, com e sem IA; perspectivas Prazos e Valores com fatos curados (Férias e Inovação); jornada de 5 passos; selo de versão e mudança entre versões; divergência AC-03; identidade pelo simulador de SSO.
+
+**Fica para a evolução:** extração automática de fatos; detecção automática de conflitos; perspectivas Obrigações e Riscos; painel de Locação (o tema continua consultável por perguntas e busca); mapa mental e apresentação; SSO real.
+
+**Só se houver tempo:** resumo executivo, avaliação da resposta e perguntas parecidas; teste de capacidade.
 
 ### Como justificar no pitch
 
-"Priorizamos o que gera confiança e decisão: documentos processados, respostas com fonte, perspectivas e conflito entre fontes. Resumo executivo e retorno do usuário entram como extensão da mesma base de fatos. Mapa mental e apresentação ficam para o plano de 6 meses, porque dependem da mesma base e não mudam o valor central."
+"Priorizamos o que gera confiança e decisão: documentos processados, respostas com fonte, perspectivas de prazos e valores e a divergência entre fontes. Os fatos do tema aprofundado foram revisados por uma pessoa. A identidade já chega por SSO, simulado na demo, e ligar o provedor da empresa é a troca de uma peça. Resumo executivo e retorno do usuário entram como extensão da mesma base. Mapa mental, apresentação, Obrigações e Riscos e a detecção automática de conflitos ficam para o plano de 6 meses."
 
 ## 5. Critérios de aceite do fluxo principal
 
 - A Gestão envia PDFs individuais ou em lote e acompanha o processamento de cada arquivo. A lista exibe tema, versão e fase. Uma falha informa o motivo e permite corrigir ou reenviar.
-- Uma pessoa autenticada consulta o tema, recebe resposta sustentada ou passagens extrativas e abre a versão original na página física citada. Uma resposta parcial indica o que ficou sem confirmação.
-- O acervo publicado continua consultável se a geração ou a busca semântica falhar. O resultado indica o modo usado quando a consulta opera em contingência.
-- Um item da jornada, da linha do tempo ou do gráfico aponta para a respectiva evidência. Mudanças de versão e divergências entre fontes aparecem de acordo com a fase e a aplicabilidade documentadas.
-- O seletor “Ver para” altera a perspectiva. A autorização segue o perfil da conta. Cada um dos três perfis autenticados pode abrir a mesma fonte, e somente Gestão pode enviar arquivos e ler alertas completos.
-- O teste de capacidade previsto em D17 usa até 100 usuários simultâneos. Durante ingestão concorrente, a meta da consulta extrativa é p95 de até 2 segundos, com menos de 1% de erros inesperados. Os resultados são registrados após medição. Consulte o [plano de arquitetura](arquitetura-clause.md#9-validação-de-capacidade-e-acesso).
+- Uma pessoa identificada pelo SSO consulta o tema, recebe resposta sustentada ou passagens extrativas e abre a versão original na página física citada. Uma resposta parcial indica o que ficou sem confirmação.
+- O acervo publicado continua consultável se a geração de texto falhar. O resultado indica o modo usado quando a consulta opera em contingência.
+- Um item da jornada, da linha do tempo ou do gráfico aponta para a respectiva evidência. Mudanças de versão e a divergência AC-03 aparecem de acordo com a fase e a aplicabilidade documentadas.
+- O seletor “Ver para” altera a perspectiva. A autorização segue o perfil da conta. Cada um dos três perfis identificados pode abrir a mesma fonte, e somente Gestão pode enviar arquivos e ler alertas completos.
+- A aplicação não aceita identidade enviada pelo navegador: só a identidade validada do SSO (ou do simulador, na demo). Sem identidade válida, nenhuma rota responde.
+- Se houver tempo, o teste de capacidade previsto em D17 usa até 100 usuários simultâneos. Durante ingestão concorrente, a meta da consulta extrativa é p95 de até 2 segundos, com menos de 1% de erros inesperados. Os resultados são registrados após medição e não bloqueiam a demo. Consulte o [plano de arquitetura](arquitetura-clause.md#9-validação-de-capacidade-e-acesso).
 
 ## 6. Roteiro da demo
 
 1. O problema: documentos densos, perguntas repetidas, decisões lentas (15 s).
 2. **Gestão:** upload em lote dos documentos, que aparecem organizados por tema, com versão e situação (30 s). Depois, volta para a Consulta.
 3. **Perspectiva "Prazos"** em Férias: jornada e linha do tempo com abertura da fonte (45 s).
-4. **Pergunta** em linguagem natural na aplicação publicada. Abrir a página física da versão citada. Em contingência, a demo mostra as passagens do modo extrativo (45 s).
+4. **Pergunta** em linguagem natural. Abrir a página física da versão citada. Em contingência, a demo mostra as passagens do modo extrativo (45 s).
 5. **Pergunta sem resposta**: o sistema diz "não consta" (20 s).
-6. **Vigência e conflito**: na Consulta, o selo "Em vigor" e o aviso curto; na Gestão, os alertas com a mudança entre versões e as divergências entre fontes (45 s).
-7. **Troca de perspectiva** para Valores em Inovação e Locação: orçamento e alçadas (30 s).
+6. **Vigência e divergência**: na Consulta, o selo "Em vigor" e o aviso curto; na Gestão, a mudança entre versões e a divergência AC-03 (45 s).
+7. **Troca de perspectiva** para Valores em Inovação: orçamento e alçadas. Uma pergunta sobre o contrato de Locação mostra a cobertura do tema (30 s).
 8. **Resumo executivo** gerado com as fontes e **avaliação** da resposta (30 s), se estiver pronto.
 9. Plano de 6 meses (30 s).
+
+A identidade da demo vem do simulador de SSO. Dizer isso em voz alta.
 
 ## 7. Evolução do produto em seis meses
 
 Exigido pelo edital (8.6). Rascunho a refinar:
 
-- **Mês 1:** processamento contínuo de novos documentos e controle automático de versões.
-- **Meses 2-3:** Ampliar o acervo da Knowledge Base, avaliar a recuperação por tema e integrar fontes oficiais de documentos. Evoluir os visuais com mapa mental interativo.
-- **Mês 4:** autenticação e papéis reais (diretório da empresa), trilha de auditoria, exportação em apresentação.
-- **Mês 5:** detecção de conflitos entre todos os documentos, alertas de vigência a vencer, aprendizado a partir das avaliações.
+- **Mês 1:** processamento contínuo de novos documentos, com extração de fatos assistida e controle automático de versões.
+- **Meses 2-3:** Ampliar o acervo da Knowledge Base, avaliar a recuperação por tema e integrar fontes oficiais de documentos. Completar as perspectivas Obrigações e Riscos e o painel de Locação. Evoluir os visuais com mapa mental interativo.
+- **Mês 4:** SSO real da empresa no lugar do simulador (provedor de identidade, grupos → perfis), trilha de auditoria, exportação em apresentação.
+- **Mês 5:** detecção automática de conflitos entre todos os documentos, alertas de vigência a vencer, aprendizado a partir das avaliações.
 - **Mês 6:** piloto com usuários, métricas de uso e de confiabilidade das respostas.
 
 ## 8. Pontos de produto em aberto
 
 - Confirmar se as três jornadas de referência e a NG_012 podem ser disponibilizadas.
 - Confirmar o nome definitivo do produto. A interface usa IPBOT.
+- Confirmar qual provedor de identidade a BBTS usa e como a aplicação receberia a identidade. Sem isso, a demo usa o simulador.
+- Confirmar se a organização espera restrição de documentos por cargo ou nível (D16 é uma suposição).
+- Definir onde a demo roda (local ou publicada). O roteiro e os critérios de aceite mencionam a aplicação publicada em alguns pontos.
