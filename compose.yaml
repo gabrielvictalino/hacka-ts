@@ -65,6 +65,21 @@ services:
       timeout: 3s
       retries: 20
 
+  importer:
+    <<: *backend
+    profiles: [tools]
+    environment:
+      <<: *backend-env
+      COLLECTION_PATH: /acervo
+    volumes:
+      - ./backend:/app/backend
+      - documents:/data/documents
+      - ${COLLECTION_PATH:-./acervo}:/acervo:ro
+    command: [python, -m, app.import_collection]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
   frontend:
     build:
       context: .

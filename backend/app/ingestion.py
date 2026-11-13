@@ -9,6 +9,7 @@ from sqlalchemy import text
 
 from app.config import get_settings
 from app.contracts import IngestionResult
+from app.document_parser import page_passages
 
 
 class InvalidDocument(ValueError):
@@ -53,7 +54,9 @@ def enqueue(connection, topic_id: UUID, filename: str, content: bytes) -> Ingest
     if previous:
         if previous["status"] == "failed":
             connection.execute(
-                text("UPDATE document_versions SET status='queued', error=NULL WHERE id=:id"),
+                text(
+                    "UPDATE document_versions SET status='queued', error=NULL, processed_pages=0, page_count=NULL WHERE id=:id"
+                ),
                 previous,
             )
             return IngestionResult(version_id=previous["id"], status="queued", duplicate=True)
@@ -115,8 +118,6 @@ def extract_pages(content: bytes) -> list[str]:
 
 
 def passages_for_page(page: str, size: int = 1500):
-    # Offsets sempre recortam o texto da mesma página física, sem reescrever a fonte.
-    for start in range(0, len(page), size):
-        excerpt = page[start : start + size].strip()
-        if excerpt:
-            yield excerpt
+    # Compatibilidade com consumidores da fundação; size não corta itens completos.
+    for _, excerpt in page_passages(page):
+        yield excerpt

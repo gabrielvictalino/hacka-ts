@@ -52,10 +52,20 @@ class Topic(Contract):
     name: str
 
 
+class TopicRequest(Contract):
+    name: str = Field(min_length=1, max_length=200, pattern=r"\S")
+
+
 class IngestionResult(Contract):
     version_id: UUID
     status: Literal["queued", "processing", "ready", "failed"]
     duplicate: bool = False
+    error: str | None = None
+
+
+class BatchFileResult(Contract):
+    filename: str
+    result: IngestionResult | None = None
     error: str | None = None
 
 
@@ -67,6 +77,13 @@ class DocumentVersion(Contract):
     title: str
     code: str | None
     version: str | None
+    document_type: str | None
+    document_layer: str | None
+    declared_phase: str | None
+    valid_from: date | None
+    valid_until: date | None
+    linked_codes: list[str]
+    processed_pages: int
     status: Literal["queued", "processing", "ready", "failed"]
     page_count: int | None
     error: str | None

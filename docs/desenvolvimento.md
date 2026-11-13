@@ -1,4 +1,4 @@
-# Ambiente de desenvolvimento · issue #8
+# Ambiente de desenvolvimento e ingestão · issues #8 e #9
 
 Execute os comandos na raiz do repositório (a pasta que contém `compose.yaml`). São necessários Docker Engine/Desktop com Compose v2+ e Python 3. O Node e o Python da aplicação ficam nos containers.
 
@@ -64,19 +64,38 @@ docker compose run --rm \
 docker compose logs -f worker
 ```
 
-O comando imprime uma linha JSON por arquivo com versão, estado e indicação de duplicação. O êxito do comando confirma o **enfileiramento**. A conclusão do processamento deve ser conferida no worker ou em `GET /api/documents?topic_id=…`. Arquivos rejeitados causam código de saída 1 sem impedir a tentativa dos demais. Falhas posteriores de extração aparecem na versão como `failed`, com motivo legível.
+Também é possível configurar `COLLECTION_PATH=/caminho/absoluto/documentos_desafio_2` no `.env` e executar:
 
-O CLI é uma ferramenta administrativa local com acesso direto ao banco. O upload HTTP (`POST /api/documents`, multipart com `topic_id` e `file`) exige sessão com permissão `documents:ingest`. Ambos chamam `app.ingestion.enqueue` e usam o mesmo worker. O limite é 25 MiB por PDF. Texto é extraído com pypdf, sem OCR nem chamadas externas.
+```sh
+docker compose --profile tools run --rm importer
+```
 
-O hash SHA-256 por tema evita duplicação, inclusive entre chamadas concorrentes. Reenviar um PDF com falha o recoloca na fila. O worker usa `FOR UPDATE SKIP LOCKED`: múltiplos workers podem compartilhar a fila e uma queda antes do commit devolve o trabalho ao estado anterior. Páginas, trechos e estado `ready` são gravados atomicamente. O estado `processing` fica na transação do worker; observadores veem `queued` até `ready` ou `failed`. Uma página vazia conserva sua posição, mas não gera trecho vazio.
+O importador usa a pasta configurada como montagem somente leitura. `ferias`, `inovacao` e `locacao` aparecem como Férias, Inovação e Locação; outras subpastas conservam o nome. PDFs de `substituidos/` herdam o tema da pasta superior. O catálogo da raiz não é importado. Os PDFs continuam fora do repositório.
 
-Antes de reutilizar um original, a ingestão confere seu SHA-256. Se estiver ausente ou corrompido, restaura atomicamente os bytes recebidos, inclusive ao enviar o mesmo PDF para outro tema. O reenvio restaura o arquivo antes de reenfileirar a versão com falha, preservando seu ID. Para uma versão já pronta, restaura somente o arquivo e conserva páginas e IDs dos trechos. Se a restauração falhar, a versão não é recolocada na fila. No upload HTTP, abertura da conexão, transação, espera de locks, gravação do PDF e commit executam juntos no threadpool, permitindo que a API continue atendendo outras requisições.
+O comando imprime uma linha JSON por arquivo com ID da versão, estado e indicação de duplicação. O êxito confirma o enfileiramento. Acompanhe a conclusão em `GET /api/documents?topic_id=…`. Arquivos rejeitados causam saída 1 sem impedir os demais. Repetir o comando restaura originais ausentes ou corrompidos e recoloca versões com falha na fila.
 
-PDFs cujo texto extraído contém caracteres nulos são marcados como `failed` antes de gravar páginas, com orientação para gerar outra cópia pesquisável. Isso preserva o texto literal dos documentos aceitos e permite que o worker continue processando os próximos arquivos da fila.
+A API fornece código, título da edição, versão, fase, tipo, vínculos, datas declaradas, estado e progresso por página de cada arquivo. Falhas incluem um motivo legível. Fase “Vigente” não é convertida automaticamente em aplicabilidade temporal. A tela de Gestão em `/documentos` será integrada pelo trabalho de frontend, seguindo o design do projeto; esta entrega não inclui essa interface.
 
-Os originais ficam no volume `documents`, por hash, e são servidos por `GET /api/documents/{version_id}/file`. Uma futura interface pode acrescentar `#page=2` ao URL para abrir uma página física. Reenvios não alteram IDs de versões já prontas nem suas citações.
+O CLI é uma ferramenta administrativa local com acesso direto ao banco. O upload HTTP exige `documents:ingest`. Rotas:
 
-Esta fundação mantém `code`, `version`, tipo, camada, fase e datas como campos opcionais. A leitura automática de cabeçalhos, a associação de edições de um mesmo documento e a detecção de metadados conflitantes pertencem à evolução da ingestão. Nesta etapa cada PDF distinto recebe sua própria identidade documental; nenhuma versão ou vigência é inferida pelo nome do arquivo. Fatos curados têm estrutura persistente, mas não são criados automaticamente.
+- `GET /api/topics`: lista os temas disponíveis.
+- `GET /api/documents?topic_id=…`: lista versões, metadados, `status`, `processed_pages`, `page_count` e `error` para acompanhamento por arquivo.
+- `POST /api/topics`: JSON com `name`, cria ou reutiliza um tema.
+- `POST /api/documents`: multipart com `topic_id` e `file`.
+- `POST /api/documents/batch`: multipart com `topic_id` e vários campos `files`; retorna um resultado ou erro por arquivo, preservando a ordem.
+- `POST /api/documents/{version_id}/retry`: tenta novamente com o original armazenado; se estiver ausente ou corrompido, orienta reenviar o PDF.
+
+O frontend pode enviar arquivos pelo endpoint individual ou pelo endpoint de lote e acompanhar as versões pela listagem de documentos. Upload, lote e importação chamam `app.ingestion.enqueue` e compartilham o worker. O limite é 25 MiB por PDF. O pypdf extrai o texto por página, sem OCR, extração de fatos ou chamadas externas. Páginas vazias conservam sua posição e não geram trechos vazios.
+
+O cabeçalho ACME fornece código, versão, tipo, título, fase, vigência e vínculos explícitos (`Vinculado a` e `Referência`). Códigos iguais no mesmo tema compartilham uma identidade documental; cada edição conserva seu título e metadados. Um código/versão já publicado com bytes diferentes é marcado como falha, com orientação para conferir a edição. Documentos fora desse padrão continuam pesquisáveis, com metadados ausentes, sem inferência pelo nome do arquivo. Datas de aprovação e assinatura não são usadas como início de vigência.
+
+O recorte respeita itens numerados, cláusulas, anexos, tabelas e blocos. Não divide itens pelo tamanho em caracteres. Quando um item continua na página seguinte, conserva o identificador da seção em uma passagem daquela página. Cada trecho é uma substring literal do texto extraído da página física; tabelas e fluxogramas conservam o texto disponível no PDF, sem reconstrução ou OCR.
+
+O hash SHA-256 por tema evita duplicação inclusive entre chamadas concorrentes. Reenviar uma versão pronta conserva IDs de páginas e trechos. Antes de reutilizar o original, a ingestão verifica seu hash e restaura atomicamente os bytes recebidos quando necessário. O worker também verifica o hash antes da extração. Caracteres nulos e PDFs sem texto extraível geram falha legível, sem publicação parcial.
+
+A seleção usa `FOR UPDATE SKIP LOCKED` e um advisory lock de sessão por versão. O estado `processing` e o progresso são visíveis em transações curtas, enquanto páginas, trechos e `ready` são publicados atomicamente em outra transação. A queda da conexão libera o advisory lock e permite retomar uma versão em `processing`, sem duplicar citações. Falhas de extração ou persistência revertem a publicação e não bloqueiam o próximo arquivo.
+
+Os originais ficam no volume `documents`, por hash, e são servidos por `GET /api/documents/{version_id}/file`. Acrescente `#page=2` para abrir uma página física. Fatos curados não são criados automaticamente; a curadoria pertence à issue #14.
 
 ## Identidade e autorização
 
@@ -108,7 +127,7 @@ docker compose run --rm --no-deps api python -m app.export_contracts > packages/
 docker compose run --rm --no-deps frontend npm run contracts:generate
 ```
 
-A CI verifica se os arquivos gerados correspondem aos fontes. `POST /api/questions` disponibiliza o contrato e retorna 501 até a implementação da consulta em issue própria. A tela inicial também é uma base técnica: upload na interface, respostas, sínteses e divergências serão implementados nos respectivos cartões.
+A CI verifica se os arquivos gerados correspondem aos fontes. `POST /api/questions` disponibiliza o contrato e retorna 501 até a implementação da consulta em issue própria. Os endpoints de ingestão estão disponíveis para integrar upload e acompanhamento à tela de Gestão. A interface segue o trabalho de frontend; respostas, sínteses e divergências pertencem aos respectivos cartões.
 
 ## Validação em ambiente isolado
 
@@ -125,6 +144,6 @@ docker compose -p ipbot-test run --rm --no-deps frontend npm run build
 docker compose -p ipbot-test down -v
 ```
 
-Os testes usam PostgreSQL real e PDFs sintéticos gerados na hora. Cobrem página física após página vazia, trecho literal, reenvio concorrente, falha sem páginas parciais, reprocessamento e acesso por perfil. As regressões também verificam atendimento de requisições durante upload bloqueado, restauração de original ausente sem alterar citações, novas migrações e múltiplos heads, perspectiva e área na consulta e os formatos de resposta publicados no OpenAPI. A CI também sobe todos os serviços e aguarda os healthchecks.
+Os testes usam PostgreSQL real e PDFs sintéticos gerados na hora. Cobrem página física após página vazia, trecho literal, reenvio concorrente, falha sem páginas parciais, reprocessamento e acesso por perfil. A ingestão verifica cabeçalhos, edições do mesmo documento, itens longos, cláusulas, progresso visível, recuperação após queda e rejeições isoladas no lote. As regressões também verificam atendimento de requisições durante upload bloqueado, restauração de original ausente sem alterar citações, novas migrações e múltiplos heads, perspectiva e área na consulta e os formatos de resposta publicados no OpenAPI. A CI também sobe todos os serviços e aguarda os healthchecks.
 
 Para atualizar dependências Python, edite `backend/requirements.in` e gere o lock com `uv pip compile backend/requirements.in --python-version 3.12 --output-file backend/requirements.txt --upgrade`. O frontend usa `npm ci` e `package-lock.json` versionado.

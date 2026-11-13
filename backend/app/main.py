@@ -1,5 +1,6 @@
+import hashlib
 from typing import Annotated
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
@@ -13,6 +14,7 @@ from app.auth import current_identity, issue_demo_token, require_ingestion
 from app.config import get_settings
 from app.contracts import (
     APIError,
+    BatchFileResult,
     DemoSessionRequest,
     DocumentVersion,
     Identity,
@@ -20,6 +22,7 @@ from app.contracts import (
     QuestionRequest,
     QuestionResponse,
     Topic,
+    TopicRequest,
 )
 from app.db import get_engine, get_migration_config
 from app.ingestion import InvalidDocument, enqueue
@@ -88,6 +91,20 @@ def topics():
         return connection.execute(text("SELECT id, name FROM topics ORDER BY name")).mappings().all()
 
 
+@app.post("/api/topics", response_model=Topic, dependencies=[Depends(require_ingestion)], tags=["ingestion"])
+def create_topic(body: TopicRequest):
+    with get_engine().begin() as connection:
+        return (
+            connection.execute(
+                text("""INSERT INTO topics(id, name) VALUES (:id, :name)
+                ON CONFLICT(name) DO UPDATE SET name=EXCLUDED.name RETURNING id, name"""),
+                {"id": uuid4(), "name": body.name.strip()},
+            )
+            .mappings()
+            .one()
+        )
+
+
 @app.get(
     "/api/documents",
     response_model=list[DocumentVersion],
@@ -99,8 +116,9 @@ def documents(topic_id: UUID):
         return (
             connection.execute(
                 text("""
-            SELECT v.id, v.document_id, v.topic_id, v.filename, d.title, d.code,
-                   v.version, v.status, v.page_count, v.error
+            SELECT v.id, v.document_id, v.topic_id, v.filename, COALESCE(v.title, d.title) AS title, d.code,
+                   v.version, v.status, v.page_count, v.error, v.document_type, v.document_layer,
+                   v.declared_phase, v.valid_from, v.valid_until, v.linked_codes, v.processed_pages
             FROM document_versions v JOIN documents d ON d.id=v.document_id
             WHERE v.topic_id=:topic ORDER BY v.created_at DESC
         """),
@@ -127,6 +145,64 @@ async def upload(topic_id: Annotated[UUID, Form()], file: Annotated[UploadFile, 
         raise HTTPException(422, str(exc)) from exc
     finally:
         await file.close()
+
+
+@app.post(
+    "/api/documents/batch",
+    response_model=list[BatchFileResult],
+    status_code=202,
+    dependencies=[Depends(require_ingestion)],
+    tags=["ingestion"],
+)
+async def upload_batch(topic_id: Annotated[UUID, Form()], files: Annotated[list[UploadFile], File()]):
+    results = []
+    try:
+        for file in files:
+            filename = file.filename or "documento.pdf"
+            try:
+                content = await file.read(get_settings().max_upload_bytes + 1)
+                result = await run_in_threadpool(_enqueue_upload, topic_id, filename, content)
+                results.append(BatchFileResult(filename=filename, result=result))
+            except InvalidDocument as exc:
+                results.append(BatchFileResult(filename=filename, error=str(exc)))
+            except OSError:
+                results.append(BatchFileResult(filename=filename, error="Armazenamento indisponível; reenvie o PDF."))
+    finally:
+        for file in files:
+            await file.close()
+    return results
+
+
+@app.post(
+    "/api/documents/{version_id}/retry",
+    response_model=IngestionResult,
+    status_code=202,
+    dependencies=[Depends(require_ingestion)],
+    tags=["ingestion"],
+)
+def retry_document(version_id: UUID):
+    with get_engine().connect() as connection:
+        row = (
+            connection.execute(
+                text("SELECT topic_id, filename, storage_key, sha256 FROM document_versions WHERE id=:id"),
+                {"id": version_id},
+            )
+            .mappings()
+            .first()
+        )
+    if not row:
+        raise HTTPException(404, "Versão não encontrada.")
+    try:
+        path = get_settings().storage_path / row["storage_key"]
+        with path.open("rb") as stream:
+            content = stream.read(get_settings().max_upload_bytes + 1)
+        if hashlib.sha256(content).hexdigest() != row["sha256"]:
+            raise InvalidDocument("Original corrompido; selecione e reenvie o PDF para restaurá-lo.")
+        return _enqueue_upload(row["topic_id"], row["filename"], content)
+    except OSError as exc:
+        raise HTTPException(422, "Original indisponível; selecione e reenvie o PDF.") from exc
+    except InvalidDocument as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 
 def _enqueue_upload(topic_id: UUID, filename: str, content: bytes) -> IngestionResult:

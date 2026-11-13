@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     auth_demo_enabled: bool = False
     auth_demo_users: dict[str, dict[str, str]] = {}
     storage_path: Path = Path("/data/documents")
+    collection_path: Path | None = None
     max_upload_bytes: int = 25 * 1024 * 1024
     worker_poll_seconds: float = 1.0
 

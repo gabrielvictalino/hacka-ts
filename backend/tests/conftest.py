@@ -18,13 +18,16 @@ def make_pdf(texts: list[str]) -> bytes:
                     NameObject("/Type"): NameObject("/Font"),
                     NameObject("/Subtype"): NameObject("/Type1"),
                     NameObject("/BaseFont"): NameObject("/Helvetica"),
+                    NameObject("/Encoding"): NameObject("/WinAnsiEncoding"),
                 }
             )
             page[NameObject("/Resources")] = DictionaryObject(
                 {NameObject("/Font"): DictionaryObject({NameObject("/F1"): writer._add_object(font)})}
             )
             stream = DecodedStreamObject()
-            stream.set_data(f"BT /F1 12 Tf 40 700 Td ({value}) Tj ET".encode())
+            lines = [line.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)") for line in value.split("\n")]
+            operators = " T* ".join(f"({line}) Tj" for line in lines)
+            stream.set_data(f"BT /F1 12 Tf 14 TL 40 700 Td {operators} ET".encode("cp1252"))
             page[NameObject("/Contents")] = writer._add_object(stream)
     result = BytesIO()
     writer.write(result)

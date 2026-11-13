@@ -12,9 +12,9 @@ from app.ingestion import InvalidDocument, enqueue
 
 def main():
     parser = argparse.ArgumentParser(description="Enfileira PDFs por subpasta/tema usando a mesma ingestão do upload.")
-    parser.add_argument("path", type=Path)
+    parser.add_argument("path", type=Path, nargs="?", default=get_settings().collection_path)
     args = parser.parse_args()
-    if not args.path.is_dir():
+    if args.path is None or not args.path.is_dir():
         parser.error("A pasta do acervo não existe.")
     paths = sorted(
         p for p in args.path.rglob("*") if p.is_file() and p.suffix.lower() == ".pdf" and p.parent != args.path
@@ -23,7 +23,8 @@ def main():
         parser.error("Nenhum PDF em subpastas/tema; catálogo da raiz não é importado.")
     failed = False
     for path in paths:
-        topic_name = path.relative_to(args.path).parts[0]
+        folder = path.relative_to(args.path).parts[0]
+        topic_name = {"ferias": "Férias", "inovacao": "Inovação", "locacao": "Locação"}.get(folder, folder)
         try:
             if path.stat().st_size > get_settings().max_upload_bytes:
                 raise InvalidDocument("Arquivo excede 25 MiB.")

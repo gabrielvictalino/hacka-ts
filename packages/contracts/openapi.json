@@ -209,6 +209,63 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": [
+          "ingestion"
+        ],
+        "summary": "Create Topic",
+        "operationId": "create_topic_api_topics_post",
+        "parameters": [
+          {
+            "name": "ipbot_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ipbot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TopicRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Topic"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/documents": {
@@ -324,6 +381,128 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/APIError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/documents/batch": {
+      "post": {
+        "tags": [
+          "ingestion"
+        ],
+        "summary": "Upload Batch",
+        "operationId": "upload_batch_api_documents_batch_post",
+        "parameters": [
+          {
+            "name": "ipbot_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ipbot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_batch_api_documents_batch_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BatchFileResult"
+                  },
+                  "title": "Response Upload Batch Api Documents Batch Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/documents/{version_id}/retry": {
+      "post": {
+        "tags": [
+          "ingestion"
+        ],
+        "summary": "Retry Document",
+        "operationId": "retry_document_api_documents__version_id__retry_post",
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Version Id"
+            }
+          },
+          {
+            "name": "ipbot_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ipbot Session"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -490,6 +669,41 @@
         ],
         "title": "APIError"
       },
+      "BatchFileResult": {
+        "properties": {
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IngestionResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "filename"
+        ],
+        "title": "BatchFileResult"
+      },
       "Body_upload_api_documents_post": {
         "properties": {
           "topic_id": {
@@ -509,6 +723,29 @@
           "file"
         ],
         "title": "Body_upload_api_documents_post"
+      },
+      "Body_upload_batch_api_documents_batch_post": {
+        "properties": {
+          "topic_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Topic Id"
+          },
+          "files": {
+            "items": {
+              "type": "string",
+              "contentMediaType": "application/octet-stream"
+            },
+            "type": "array",
+            "title": "Files"
+          }
+        },
+        "type": "object",
+        "required": [
+          "topic_id",
+          "files"
+        ],
+        "title": "Body_upload_batch_api_documents_batch_post"
       },
       "Citation": {
         "properties": {
@@ -706,6 +943,74 @@
             ],
             "title": "Version"
           },
+          "document_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Type"
+          },
+          "document_layer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Layer"
+          },
+          "declared_phase": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared Phase"
+          },
+          "valid_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid From"
+          },
+          "valid_until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid Until"
+          },
+          "linked_codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Linked Codes"
+          },
+          "processed_pages": {
+            "type": "integer",
+            "title": "Processed Pages"
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -749,6 +1054,13 @@
           "title",
           "code",
           "version",
+          "document_type",
+          "document_layer",
+          "declared_phase",
+          "valid_from",
+          "valid_until",
+          "linked_codes",
+          "processed_pages",
           "status",
           "page_count",
           "error"
@@ -1027,6 +1339,23 @@
           "name"
         ],
         "title": "Topic"
+      },
+      "TopicRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Name"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "TopicRequest"
       },
       "ValidationError": {
         "properties": {
