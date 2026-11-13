@@ -6,8 +6,10 @@ Tudo é feito por [`scripts/dev-local.sh`](../scripts/dev-local.sh). Nunca apont
 
 ## Requisitos
 
-- Linux x86_64 ou macOS, `bash`, `curl`, Python 3.12 (recomendado via [`uv`](https://docs.astral.sh/uv/)) e Node 20+ com `npm`.
-- PostgreSQL 16: o script instala os binários oficiais empacotados no pacote Python [`pgserver`](https://pypi.org/project/pgserver/) (`0.1.4`, PostgreSQL 16.2) numa venv fora do repositório. Se já houver PostgreSQL instalado, aponte `IPBOT_PG_BIN` para a pasta com `initdb`, `pg_ctl` e `psql`.
+- **Linux.** Validado em Amazon Linux 2023, x86_64. **macOS não é suportado**: o controle de processos usa `setsid` (util-linux), que o macOS não traz. Em macOS, use o Compose.
+- `bash`, `setsid`, `curl`, `pgrep` (procps) e Python 3. O script verifica `setsid`, `curl` e `python3` antes de agir e recusa sistemas que não sejam Linux.
+- Python 3.12 para a aplicação (recomendado via [`uv`](https://docs.astral.sh/uv/)) e Node 22+ com `npm`.
+- PostgreSQL 16: o script instala os binários oficiais empacotados no pacote Python [`pgserver`](https://pypi.org/project/pgserver/) (`0.1.4`, PostgreSQL 16.2) numa venv fora do repositório. Se já houver PostgreSQL instalado, aponte `IPBOT_PG_BIN` para a pasta com `initdb`, `pg_ctl` e `psql`. O `init-db` usa a locale `C.UTF-8`, disponível nas distribuições Linux atuais.
 
 ## Onde ficam os dados
 
@@ -51,6 +53,15 @@ scripts/dev-local.sh test                       # pytest backend/tests no banco 
 
 Para conferir migrações como a CI: `scripts/dev-local.sh run .venv/bin/alembic -c backend/alembic.ini downgrade base` e depois `migrate`.
 
+## Outros testes
+
+```sh
+(cd frontend && npm test)                       # regras da Gestão e do "Ver para" (node --test, sem banco)
+bash scripts/tests/test-dev-local.sh            # checagem de portas por serviço e stop do grupo de processos
+```
+
+Nenhum dos dois precisa de PostgreSQL. A CI ainda não executa esses testes; a ampliação da CI está na #16.
+
 ## Acervo e uso da aplicação
 
 Use outro banco para o acervo, para não misturar dados com a suíte de testes:
@@ -70,7 +81,7 @@ scripts/dev-local.sh status
 scripts/dev-local.sh stop                       # para tudo; os dados ficam em IPBOT_STATE_DIR
 ```
 
-Portas e banco são configuráveis por `IPBOT_PG_PORT`, `IPBOT_API_PORT`, `IPBOT_FRONTEND_PORT` e `IPBOT_DB`.
+Portas e banco são configuráveis por `IPBOT_PG_PORT`, `IPBOT_API_PORT`, `IPBOT_FRONTEND_PORT` e `IPBOT_DB`. O `start` recusa uma porta ocupada por um processo que não seja o próprio serviço; `scripts/dev-local.sh check-port api 8000` faz a mesma verificação sem iniciar nada.
 
 ## Recuperação após reiniciar a sessão ou a máquina
 

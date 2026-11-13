@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Ambiente local do IPBOT sem Docker nem sudo: PostgreSQL exclusivo de desenvolvimento,
 # worker, API e frontend. Guia completo: docs/ambiente-sem-docker.md
+# Suportado só em Linux (validado em Amazon Linux 2023, x86_64): depende de setsid (util-linux).
 #
 # Configuração por variáveis de ambiente (todas opcionais):
 #   IPBOT_STATE_DIR      estado local: banco, credenciais, logs, PIDs, binários e PDFs enviados
@@ -120,6 +121,24 @@ halt() {
 
 port_busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 
+# Uma porta ocupada só é aceita se o próprio serviço deste ambiente estiver no ar; outro serviço vivo
+# (por exemplo, o frontend) não autoriza um processo estranho na porta da API.
+ensure_port() { # serviço, porta
+  local name="$1" port="$2"
+  if alive "$name"; then return 0; fi
+  if port_busy "$port"; then
+    die "porta $port ($name) já está em uso por outro processo. Escolha outra com IPBOT_API_PORT/IPBOT_FRONTEND_PORT."
+  fi
+}
+
+# Dependências do script, validado em Linux (Amazon Linux 2023, x86_64). Não há suporte a macOS: setsid não existe lá.
+require_tools() {
+  local missing=()
+  for tool in "$@"; do command -v "$tool" >/dev/null 2>&1 || missing+=("$tool"); done
+  [ "$(uname -s)" = "Linux" ] || die "este script só é suportado em Linux (sistema atual: $(uname -s))."
+  [ "${#missing[@]}" -eq 0 ] || die "ferramentas ausentes: ${missing[*]}"
+}
+
 # Pronto só se o próprio processo continuar vivo: uma resposta de outro serviço na porta não conta.
 wait_ready() { # nome, url, segundos
   for _ in $(seq "$3"); do
@@ -131,6 +150,18 @@ wait_ready() { # nome, url, segundos
 }
 
 case "${1:-}" in
+  setup-postgres|init-db|create-db|pg-start|pg-stop|migrate|test|import|run|start|stop|status|check-port)
+    require_tools setsid curl python3 ;;
+esac
+
+case "${1:-}" in
+  check-port)
+    # Diagnóstico: falha se a porta estiver ocupada por algo que não seja o próprio serviço deste ambiente.
+    [[ "${2:-}" =~ ^(api|frontend)$ ]] || die "uso: $0 check-port api|frontend PORTA"
+    [[ "${3:-}" =~ ^[0-9]+$ ]] || die "informe a porta"
+    ensure_port "$2" "$3"
+    echo "porta $3 livre para $2 (ou já usada pelo próprio $2)"
+    ;;
   setup-postgres)
     # Binários oficiais do PostgreSQL 16 empacotados em pgserver, instalados fora do repositório.
     if [ -n "$(ls -d "$PG_VENV"/lib/python3*/site-packages/pgserver 2>/dev/null || true)" ]; then
@@ -185,11 +216,8 @@ SQL
   start)
     pg_start; load_env
     [ -d "$ROOT/frontend/node_modules" ] || die "dependências do frontend ausentes. Rode: (cd frontend && npm ci)"
-    for port in "$LOCAL_API_PORT" "$LOCAL_FRONTEND_PORT"; do
-      if port_busy "$port" && ! { alive api || alive frontend; }; then
-        die "porta $port já está em uso por outro processo. Escolha outra com IPBOT_API_PORT/IPBOT_FRONTEND_PORT."
-      fi
-    done
+    ensure_port api "$LOCAL_API_PORT"
+    ensure_port frontend "$LOCAL_FRONTEND_PORT"
     launch worker "$ROOT" "$PY" -m app.worker
     launch api "$ROOT" "$PY" -m uvicorn app.main:app --host 127.0.0.1 --port "$LOCAL_API_PORT"
     launch frontend "$ROOT/frontend" env API_PROXY_TARGET="http://127.0.0.1:$LOCAL_API_PORT" \
@@ -221,6 +249,8 @@ Uso: $0 <comando>
   import PASTA     importa o acervo local para o banco \$IPBOT_DB
   run CMD...       executa um comando com o .env e o banco local
   start|stop|status  PostgreSQL, worker, API e frontend
+  check-port SERVIÇO PORTA  confere se a porta está livre para api ou frontend
+Suportado só em Linux (validado em Amazon Linux 2023, x86_64). Requer bash, setsid (util-linux), curl e python3.
 EOF
     exit 2
     ;;
