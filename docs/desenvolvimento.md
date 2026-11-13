@@ -2,6 +2,8 @@
 
 Execute os comandos na raiz do repositório (a pasta que contém `compose.yaml`). São necessários Docker Engine/Desktop com Compose v2+ e Python 3. O Node e o Python da aplicação ficam nos containers.
 
+Sem Docker nem privilégios administrativos, use o [ambiente local sem Docker](ambiente-sem-docker.md) (`scripts/dev-local.sh`), com um PostgreSQL 16 exclusivo de desenvolvimento.
+
 ## Inicialização
 
 ```sh

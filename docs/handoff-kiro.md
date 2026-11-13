@@ -57,7 +57,9 @@ A posição segue a especificação, não só a compilação: a #15 pede "aviso 
 
 ## Ambiente do Kiro usado (específico desta máquina, fora do repositório)
 
-Comandos exatos de início, parada e validação, locais de configuração e dados e recuperação após reiniciar: `/kiro/.tools/LEIA-ME.md`. Resumo:
+Versão portátil no repositório: [`scripts/dev-local.sh`](../scripts/dev-local.sh) e [`docs/ambiente-sem-docker.md`](ambiente-sem-docker.md), com preparação reproduzível do PostgreSQL, caminhos configuráveis (`IPBOT_STATE_DIR`, `IPBOT_DB`, portas) e recuperação. Validada do zero num estado isolado: migrações, 290 testes, acervo com 13/13 versões e 59 fatos publicados.
+
+Nesta máquina há também uma cópia específica em `/kiro/.tools/` (`ipbot-dev.sh`, `LEIA-ME.md`), que ainda serve o ambiente em uso:
 
 ```sh
 /kiro/.tools/ipbot-dev.sh start | status | stop   # PostgreSQL, worker, API e frontend
