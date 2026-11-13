@@ -29,6 +29,8 @@ export function QuestionPanel({ topics, view }: { topics: Topic[]; view: string 
   const evidencePanel = useRef<HTMLElement>(null);
   const resultHeading = useRef<HTMLHeadingElement>(null);
   useEffect(() => { if (evidence) evidencePanel.current?.focus(); }, [evidence]);
+  // Só parcial e insuficiente têm trechos que não confirmam a resposta; "divergent" mostra as evidências em conflito.
+  const unconfirmed = result?.status === "partial" || result?.status === "insufficient";
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError("");
     try {
@@ -78,9 +80,9 @@ export function QuestionPanel({ topics, view }: { topics: Topic[]; view: string 
       <h3 ref={resultHeading} tabIndex={-1}>{statuses[result.status]}</h3>
       {result.notice && <p role="status" className="notice">{result.notice}</p>}
       {/* Sem sustentação completa, a lacuna vem antes dos trechos para não ser lida como resposta. */}
-      {result.status !== "supported" && result.gaps.length > 0 && <Gaps gaps={result.gaps} />}
+      {unconfirmed && result.gaps.length > 0 && <Gaps gaps={result.gaps} />}
       {result.claims.length === 0 && <p>Nenhuma afirmação foi sustentada pelos trechos do tema.</p>}
-      {result.status !== "supported" && result.claims.length > 0 && <p className="muted">Trechos relacionados encontrados no tema. Eles não confirmam os pontos acima.</p>}
+      {unconfirmed && result.claims.length > 0 && <p className="muted">Trechos relacionados encontrados no tema. Eles não confirmam os pontos acima.</p>}
       {result.claims.map((claim, index) => <article className="claim" key={index}>
         {claim.calculation_step != null && <p>Resultado calculado · passo {claim.calculation_step + 1}</p>}
         <blockquote>{claim.text}</blockquote>
@@ -88,7 +90,7 @@ export function QuestionPanel({ topics, view }: { topics: Topic[]; view: string 
           Conferir {c.code || c.title} · {c.version || "versão não identificada"} · p. {c.physical_page}{c.section ? ` · ${c.section}` : ""}
         </button>)}
       </article>)}
-      {result.status === "supported" && result.gaps.length > 0 && <Gaps gaps={result.gaps} />}
+      {!unconfirmed && result.gaps.length > 0 && <Gaps gaps={result.gaps} />}
       <p className="muted">{context}{view ? ` · Visão: ${view}` : ""}</p>
       <p className="muted">{result.mode === "extractive" ? "Modo extrativo" : "Seleção de trechos por modelo"} · Referência: {result.reference_date}</p>
       <p className="muted">{result.calculation

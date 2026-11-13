@@ -85,10 +85,11 @@ function App() {
   const management = canManage(identity);
   return <main>
     <header className="app-header">
-      <p className="eyebrow">IPBOT · Acervo e fontes verificáveis</p>
+      <p className="eyebrow">IPBOT</p>
       {identity && <p className="session" role="status">{identity.name} · {identity.role}
         {identity.simulated ? " · SSO simulado" : ""}</p>}
     </header>
+    <h1>Acervo e fontes verificáveis</h1>
     {!checked && <p role="status">Verificando a sua conta…</p>}
     {error && <p role="alert">{error}</p>}
     {checked && (users.length > 0 || !identity) && <section aria-labelledby="identity-title" className="demo-identity">

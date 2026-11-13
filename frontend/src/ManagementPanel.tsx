@@ -177,6 +177,8 @@ export function ManagementPanel({ topics, onTopicsChanged }: {
       }
       setStatus("Arquivo recolocado na fila de processamento.");
       await load();
+    } catch {
+      setRetryErrors(current => ({ ...current, [id]: "Não foi possível conectar ao servidor. Tente novamente." }));
     } finally {
       setRetrying(null);
     }
