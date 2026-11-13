@@ -30,7 +30,7 @@ def find_quote(excerpt: str, quote: str) -> str | None:
     return match[0] if match else None
 
 
-def _resolve_source(connection, topic_id, source: Source):
+def resolve_source(connection, topic_id, source: Source):
     passages = (
         connection.execute(
             text("""SELECT p.id, p.excerpt, p.section FROM passages p
@@ -67,7 +67,7 @@ def _resolve(connection, fact: CuratedFact):
         return None, None, f"Tema {fact.topic} não encontrado."
     citations, seen = [], set()
     for source in fact.sources:
-        resolved, reason = _resolve_source(connection, topic_id, source)
+        resolved, reason = resolve_source(connection, topic_id, source)
         if resolved is None:
             return None, None, reason
         # Recortes distintos da mesma passagem são evidências próprias; só o recorte repetido é omitido.
