@@ -20,3 +20,8 @@ blockquote { white-space: pre-wrap; margin: 12px 0; overflow-wrap: anywhere; }
 small { display: block; overflow-wrap: anywhere; margin-bottom: 16px; }
 a { color: #17645b; }
 @media (max-width: 500px) { main { padding: 28px 12px; } section { padding: 16px; } }
+
+.calculation-fields { margin: 8px 0 20px; padding: 16px; border: 1px solid #d9e4dd; border-radius: 8px; min-width: 0; }
+.calculation-fields legend { font-weight: 600; padding: 0 6px; }
+.holiday-row { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 12px; }
+.holiday-row label { flex: 1; min-width: 160px; margin-bottom: 0; }

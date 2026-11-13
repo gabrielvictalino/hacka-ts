@@ -356,8 +356,14 @@ Sem modelo ou em contingência, a mesma resposta local conserva todos os resulta
 com modelo, a organização pode mudar, mas a memória e as premissas permanecem iguais. O modo
 `extractive` continua identificando a resposta local, incluindo resultados calculados em código.
 A inferência de cálculos a partir de texto livre e novas regras (por exemplo, multa de Locação)
-não são implementadas aqui. O campo estruturado está disponível pela API/OpenAPI; o formulário
-textual atual continua enviando consultas sem cálculo.
+não são implementadas aqui. O formulário de consulta oferece **Cálculo com explicação (opcional)** com as sete regras e
+campos específicos: valores monetários, tamanho da equipe, faltas, início das férias, datas
+opcionais e feriados adicionados individualmente. Campos obrigatórios e limites numéricos são
+validados antes do envio. Ao trocar de regra, os parâmetros são limpos; trocar de tema também
+volta para **Sem cálculo**. Regras de orçamento e pagamento de premiações não exigem campos
+adicionais. A pergunta, o tema, a data de referência e os filtros acompanham `calculation`;
+**Sem cálculo** envia `calculation=null` e mantém a busca textual. O período das férias e a data
+de referência são campos distintos: um alimenta a conta e o outro seleciona as fontes elegíveis.
 
 IDs desconhecidos, duplicatas, metadados injetados, texto alterado, JSON inválido, resposta
 vazia, truncamento, bloqueio de conteúdo, perda de cobertura, erros AWS e timeout preservam

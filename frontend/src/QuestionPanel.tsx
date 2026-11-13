@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { components } from "../../packages/contracts";
+import { buildCalculation, CalculationFields, emptyCalculation } from "./CalculationFields";
 
 type Topic = components["schemas"]["Topic"];
 type Result = components["schemas"]["QuestionResponse"];
@@ -14,6 +15,7 @@ export function QuestionPanel({ topics }: { topics: Topic[] }) {
   const [perspective, setPerspective] = useState("");
   const [area, setArea] = useState("");
   const [date, setDate] = useState("");
+  const [calculation, setCalculation] = useState(emptyCalculation);
   const [result, setResult] = useState<Result | null>(null);
   const [context, setContext] = useState("");
   const [evidence, setEvidence] = useState<Citation | null>(null);
@@ -29,7 +31,7 @@ export function QuestionPanel({ topics }: { topics: Topic[] }) {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ topic_id: topic || topics[0]?.id, question,
           perspective: perspective || null, reference_date: date || null,
-          filters: { area: area.trim() || null } }),
+          filters: { area: area.trim() || null }, calculation: buildCalculation(calculation) }),
       });
       if (!response.ok) {
         const body = await response.json();
@@ -44,7 +46,7 @@ export function QuestionPanel({ topics }: { topics: Topic[] }) {
     <h2 id="question-title">Perguntar ao acervo</h2>
     <form onSubmit={submit}>
       <label>Tema<select required disabled={busy || !topics.length} value={topic || topics[0]?.id || ""}
-        onChange={e => setTopic(e.target.value)}>
+        onChange={e => { setTopic(e.target.value); setCalculation(emptyCalculation()); }}>
         {!topics.length && <option value="">Nenhum tema disponível</option>}
         {topics.map(t => <option value={t.id} key={t.id}>{t.name}</option>)}
       </select></label>
@@ -58,6 +60,7 @@ export function QuestionPanel({ topics }: { topics: Topic[] }) {
         <label>Área<input value={area} maxLength={200} disabled={busy} onChange={e => setArea(e.target.value)} placeholder="Ex.: GGC" /></label>
         <label>Data de referência<input type="date" value={date} disabled={busy} onChange={e => setDate(e.target.value)} /></label>
       </div>
+      <CalculationFields value={calculation} onChange={setCalculation} disabled={busy || !topics.length} />
       <button disabled={busy || !topics.length || !question.trim()}>{busy ? "Consultando…" : "Perguntar"}</button>
     </form>
     {error && <p role="alert">{error}</p>}
