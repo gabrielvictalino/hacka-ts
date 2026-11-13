@@ -162,6 +162,11 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** APIError */
+        APIError: {
+            /** Detail */
+            detail: string | components["schemas"]["ValidationIssue"][];
+        };
         /** Body_upload_api_documents_post */
         Body_upload_api_documents_post: {
             /**
@@ -303,6 +308,16 @@ export interface components {
          * @enum {string}
          */
         Permission: "documents:read" | "documents:ingest" | "facts:curate";
+        /**
+         * Perspective
+         * @enum {string}
+         */
+        Perspective: "deadline" | "value" | "obligation" | "risk";
+        /** QuestionFilters */
+        QuestionFilters: {
+            /** Area */
+            area?: string | null;
+        };
         /** QuestionRequest */
         QuestionRequest: {
             /**
@@ -314,6 +329,8 @@ export interface components {
             question: string;
             /** Reference Date */
             reference_date?: string | null;
+            perspective?: components["schemas"]["Perspective"] | null;
+            filters?: components["schemas"]["QuestionFilters"];
         };
         /** QuestionResponse */
         QuestionResponse: {
@@ -368,6 +385,17 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** ValidationIssue */
+        ValidationIssue: {
+            /** Loc */
+            loc: (string | number)[];
+            /** Msg */
+            msg: string;
+            /** Type */
+            type: string;
+        } & {
+            [key: string]: unknown;
         };
     };
     responses: never;
@@ -590,13 +618,13 @@ export interface operations {
                     "application/json": components["schemas"]["IngestionResult"];
                 };
             };
-            /** @description Validation Error */
+            /** @description PDF ou tema inválido, ou erro de validação dos campos */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["APIError"];
                 };
             };
         };
@@ -619,7 +647,18 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Versão ou original não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
             };
             /** @description Validation Error */
             422: {

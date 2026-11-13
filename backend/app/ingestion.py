@@ -37,13 +37,19 @@ def enqueue(connection, topic_id: UUID, filename: str, content: bytes) -> Ingest
     previous = (
         connection.execute(
             text("""
-        SELECT id, status, error FROM document_versions WHERE topic_id=:topic AND sha256=:sha
+        SELECT id, status, error FROM document_versions WHERE topic_id=:topic AND sha256=:sha FOR UPDATE
     """),
             {"topic": topic_id, "sha": digest},
         )
         .mappings()
         .first()
     )
+    storage_key = f"{digest}.pdf"
+    settings.storage_path.mkdir(parents=True, exist_ok=True)
+    target = settings.storage_path / storage_key
+    # Reenvios também reparam o armazenamento antes de devolver ou reenfileirar a versão.
+    if not target.is_file():
+        _store_original(target, content)
     if previous:
         if previous["status"] == "failed":
             connection.execute(
@@ -59,15 +65,6 @@ def enqueue(connection, topic_id: UUID, filename: str, content: bytes) -> Ingest
         )
 
     document_id, version_id = uuid4(), uuid4()
-    storage_key = f"{digest}.pdf"
-    settings.storage_path.mkdir(parents=True, exist_ok=True)
-    target = settings.storage_path / storage_key
-    temporary = settings.storage_path / f".{uuid4()}.tmp"
-    try:
-        temporary.write_bytes(content)
-        os.replace(temporary, target)
-    finally:
-        temporary.unlink(missing_ok=True)
     safe_name = Path(filename.replace("\\", "/")).name
     connection.execute(
         text("INSERT INTO documents(id, topic_id, title) VALUES (:id, :topic, :title)"),
@@ -88,6 +85,16 @@ def enqueue(connection, topic_id: UUID, filename: str, content: bytes) -> Ingest
         },
     )
     return IngestionResult(version_id=version_id, status="queued")
+
+
+def _store_original(target: Path, content: bytes) -> None:
+    settings = get_settings()
+    temporary = settings.storage_path / f".{uuid4()}.tmp"
+    try:
+        temporary.write_bytes(content)
+        os.replace(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def extract_pages(content: bytes) -> list[str]:

@@ -319,11 +319,11 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "PDF ou tema inválido, ou erro de validação dos campos",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/APIError"
                 }
               }
             }
@@ -368,7 +368,25 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Versão ou original não encontrado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -448,6 +466,30 @@
   },
   "components": {
     "schemas": {
+      "APIError": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ValidationIssue"
+                },
+                "type": "array"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "APIError"
+      },
       "Body_upload_api_documents_post": {
         "properties": {
           "topic_id": {
@@ -813,6 +855,36 @@
         ],
         "title": "Permission"
       },
+      "Perspective": {
+        "type": "string",
+        "enum": [
+          "deadline",
+          "value",
+          "obligation",
+          "risk"
+        ],
+        "title": "Perspective"
+      },
+      "QuestionFilters": {
+        "properties": {
+          "area": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Area"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "QuestionFilters"
+      },
       "QuestionRequest": {
         "properties": {
           "topic_id": {
@@ -837,6 +909,19 @@
               }
             ],
             "title": "Reference Date"
+          },
+          "perspective": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Perspective"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "filters": {
+            "$ref": "#/components/schemas/QuestionFilters"
           }
         },
         "additionalProperties": false,
@@ -982,6 +1067,40 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "ValidationIssue": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Loc"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Msg"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationIssue"
       }
     }
   }

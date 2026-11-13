@@ -1,13 +1,18 @@
 from typing import Annotated
 from uuid import UUID
 
+from alembic.runtime.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+from starlette.concurrency import run_in_threadpool
 
 from app.auth import current_identity, issue_demo_token, require_ingestion
 from app.config import get_settings
 from app.contracts import (
+    APIError,
     DemoSessionRequest,
     DocumentVersion,
     Identity,
@@ -16,7 +21,7 @@ from app.contracts import (
     QuestionResponse,
     Topic,
 )
-from app.db import get_engine
+from app.db import get_engine, get_migration_config
 from app.ingestion import InvalidDocument, enqueue
 
 app = FastAPI(title="IPBOT API", version="0.1.0")
@@ -29,11 +34,15 @@ def live():
 
 @app.get("/health/ready", tags=["health"])
 def ready():
-    with get_engine().connect() as connection:
-        revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
-    if revision != "0001":
+    expected = set(ScriptDirectory.from_config(get_migration_config()).get_heads())
+    try:
+        with get_engine().connect() as connection:
+            applied = set(MigrationContext.configure(connection).get_current_heads())
+    except SQLAlchemyError as exc:
+        raise HTTPException(503, "Banco indisponível.") from exc
+    if applied != expected:
         raise HTTPException(503, "Migração pendente.")
-    return {"status": "ready", "migration": revision}
+    return {"status": "ready", "migrations": sorted(applied)}
 
 
 @app.get("/api/auth/demo/users", response_model=list[Identity], tags=["identity"])
@@ -108,16 +117,22 @@ def documents(topic_id: UUID):
     status_code=202,
     dependencies=[Depends(require_ingestion)],
     tags=["ingestion"],
+    responses={422: {"model": APIError, "description": "PDF ou tema inválido, ou erro de validação dos campos"}},
 )
 async def upload(topic_id: Annotated[UUID, Form()], file: Annotated[UploadFile, File()]):
-    content = await file.read(get_settings().max_upload_bytes + 1)
     try:
-        with get_engine().begin() as connection:
-            return enqueue(connection, topic_id, file.filename or "documento.pdf", content)
+        content = await file.read(get_settings().max_upload_bytes + 1)
+        return await run_in_threadpool(_enqueue_upload, topic_id, file.filename or "documento.pdf", content)
     except InvalidDocument as exc:
         raise HTTPException(422, str(exc)) from exc
     finally:
         await file.close()
+
+
+def _enqueue_upload(topic_id: UUID, filename: str, content: bytes) -> IngestionResult:
+    # A conexão, os locks, o disco e o commit ficam no mesmo thread de trabalho.
+    with get_engine().begin() as connection:
+        return enqueue(connection, topic_id, filename, content)
 
 
 @app.get(
@@ -125,6 +140,10 @@ async def upload(topic_id: Annotated[UUID, Form()], file: Annotated[UploadFile, 
     dependencies=[Depends(current_identity)],
     response_class=FileResponse,
     tags=["ingestion"],
+    responses={
+        200: {"content": {"application/pdf": {"schema": {"type": "string", "format": "binary"}}}},
+        404: {"model": APIError, "description": "Versão ou original não encontrado"},
+    },
 )
 def original(version_id: UUID):
     with get_engine().connect() as connection:

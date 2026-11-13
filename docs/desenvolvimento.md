@@ -17,6 +17,8 @@ O frontend fica em `http://localhost:5173`, a API em `http://localhost:8000` e o
 
 O PostgreSQL precisa passar no healthcheck e o serviço `migrate` precisa concluir antes de iniciar API e worker. É esperado que `migrate` apareça como `Exited (0)`. O frontend inicia após a API ficar pronta. `GET /health/live` verifica o processo e `GET /health/ready` verifica banco e revisão da migração. O healthcheck do worker usa um heartbeat atualizado após cada consulta à fila.
 
+O readiness compara o conjunto de revisões aplicadas no banco com os heads esperados pelos arquivos Alembic, inclusive quando há mais de um head. Uma nova revisão aplicada corretamente continua permitindo iniciar o frontend; banco indisponível ou revisão pendente retorna 503. A resposta saudável lista as revisões em `migrations`.
+
 API e frontend recarregam alterações dos fontes montados. Reinicie o worker após alterar seu código. Alterações em dependências exigem rebuild; se mudar o `package-lock.json`, atualize também o volume de dependências com `docker compose run --rm --no-deps frontend npm ci`.
 
 ```sh
@@ -68,6 +70,8 @@ O CLI é uma ferramenta administrativa local com acesso direto ao banco. O uploa
 
 O hash SHA-256 por tema evita duplicação, inclusive entre chamadas concorrentes. Reenviar um PDF com falha o recoloca na fila. O worker usa `FOR UPDATE SKIP LOCKED`: múltiplos workers podem compartilhar a fila e uma queda antes do commit devolve o trabalho ao estado anterior. Páginas, trechos e estado `ready` são gravados atomicamente. O estado `processing` fica na transação do worker; observadores veem `queued` até `ready` ou `failed`. Uma página vazia conserva sua posição, mas não gera trecho vazio.
 
+Se o original estiver ausente, o reenvio restaura os bytes por hash antes de reenfileirar a versão com falha, preservando seu ID. Para uma versão já pronta, restaura somente o arquivo e conserva páginas e IDs dos trechos. Se a restauração falhar, a versão não é recolocada na fila. No upload HTTP, abertura da conexão, transação, espera de locks, gravação do PDF e commit executam juntos no threadpool, permitindo que a API continue atendendo outras requisições.
+
 PDFs cujo texto extraído contém caracteres nulos são marcados como `failed` antes de gravar páginas, com orientação para gerar outra cópia pesquisável. Isso preserva o texto literal dos documentos aceitos e permite que o worker continue processando os próximos arquivos da fila.
 
 Os originais ficam no volume `documents`, por hash, e são servidos por `GET /api/documents/{version_id}/file`. Uma futura interface pode acrescentar `#page=2` ao URL para abrir uma página física. Reenvios não alteram IDs de versões já prontas nem suas citações.
@@ -85,6 +89,19 @@ O simulador é habilitado explicitamente por `AUTH_DEMO_ENABLED=true`. As contas
 ## Contratos compartilhados
 
 `backend/app/contracts.py` é a fonte dos modelos de ingestão, citação, pergunta/resposta, identidade, perfis e permissões. `packages/contracts/openapi.json` publica o OpenAPI e `packages/contracts/index.d.ts` publica os tipos TypeScript usados pelo React, sem duplicar interfaces manualmente.
+
+O contrato de consulta aceita `perspective` opcional (`deadline`, `value`, `obligation` ou `risk`) e filtro por área em `filters.area`. `deadline` corresponde a Prazos e `value` a Valores; as demais perspectivas ficam previstas para evolução. Os campos são opcionais para manter compatibilidade com perguntas apenas por tema, texto e data. Exemplo de entrada válida:
+
+```json
+{
+  "topic_id": "00000000-0000-0000-0000-000000000001",
+  "question": "Qual o prazo de solicitação?",
+  "perspective": "deadline",
+  "filters": {"area": "GGC"}
+}
+```
+
+O erro 422 do upload declara tanto `detail` textual (PDF ou tema não aceito) quanto a lista de erros de validação dos campos. O download declara corpo binário `application/pdf` no OpenAPI e nos tipos gerados.
 
 ```sh
 docker compose run --rm --no-deps api python -m app.export_contracts > packages/contracts/openapi.json
@@ -108,6 +125,6 @@ docker compose -p ipbot-test run --rm --no-deps frontend npm run build
 docker compose -p ipbot-test down -v
 ```
 
-Os testes usam PostgreSQL real e PDFs sintéticos gerados na hora. Cobrem página física após página vazia, trecho literal, reenvio concorrente, falha sem páginas parciais, reprocessamento e acesso por perfil. A CI também sobe todos os serviços e aguarda os healthchecks.
+Os testes usam PostgreSQL real e PDFs sintéticos gerados na hora. Cobrem página física após página vazia, trecho literal, reenvio concorrente, falha sem páginas parciais, reprocessamento e acesso por perfil. As regressões também verificam atendimento de requisições durante upload bloqueado, restauração de original ausente sem alterar citações, novas migrações e múltiplos heads, perspectiva e área na consulta e os formatos de resposta publicados no OpenAPI. A CI também sobe todos os serviços e aguarda os healthchecks.
 
 Para atualizar dependências Python, edite `backend/requirements.in` e gere o lock com `uv pip compile backend/requirements.in --python-version 3.12 --output-file backend/requirements.txt --upgrade`. O frontend usa `npm ci` e `package-lock.json` versionado.

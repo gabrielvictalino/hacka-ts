@@ -12,6 +12,17 @@ class Contract(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class ValidationIssue(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    loc: list[str | int]
+    msg: str
+    type: str
+
+
+class APIError(Contract):
+    detail: str | list[ValidationIssue]
+
+
 class Role(StrEnum):
     empregado = "empregado"
     gestor = "gestor"
@@ -72,10 +83,23 @@ class Citation(Contract):
     section: str | None = None
 
 
+class Perspective(StrEnum):
+    deadline = "deadline"
+    value = "value"
+    obligation = "obligation"
+    risk = "risk"
+
+
+class QuestionFilters(Contract):
+    area: str | None = Field(default=None, min_length=1, max_length=200)
+
+
 class QuestionRequest(Contract):
     topic_id: UUID
     question: str = Field(min_length=1, max_length=4000)
     reference_date: date | None = None
+    perspective: Perspective | None = None
+    filters: QuestionFilters = Field(default_factory=QuestionFilters)
 
 
 class Claim(Contract):
