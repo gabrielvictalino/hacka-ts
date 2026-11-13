@@ -35,6 +35,7 @@ CONNECTORS = set(
 )
 
 
+CLAUSE_COMMA = re.compile(r"(?<!\d),|,(?!\d)")
 EXCLUSION = re.compile(r"\b(?:salvo|exceto|ressalvad[oa]s?|excluíd[oa]s?|(?:com|à)\s+exceção)\b", re.I)
 
 
@@ -46,12 +47,40 @@ def affirmative_scope(sentence):
         if TIME.search(before) or MONEY.search(before):
             return before
         remainder = sentence[match.end() :]
-        boundary = re.search(r"(?<!\d),|,(?!\d)", remainder)
+        boundary = CLAUSE_COMMA.search(remainder)
         if not boundary:
             return before
         # Exceção inicial ou intercalada: conserva a oração geral depois da vírgula.
         sentence = before + " " + remainder[boundary.end() :]
     return sentence.strip()
+
+
+EXCEPTION_RULE_BOUNDARY = re.compile(
+    r"\b(?:quando|cujo|cuja|hipótese\s+em\s+que|caso\s+em\s+que|em\s+que)\b",
+    re.I,
+)
+RULE_MARKER = re.compile(r"\b(?:prazo|antecedência|valor|custo|preço)\b", re.I)
+
+
+def affirmative_scopes(sentence):
+    """Separa a regra geral das atribuições explícitas dentro de suas exceções."""
+    scopes = [affirmative_scope(sentence)]
+    for exclusion in EXCLUSION.finditer(sentence):
+        remainder = sentence[exclusion.end() :]
+        # A vírgula encerra a condição; “em que” dentro dela não inicia outra regra.
+        boundary = CLAUSE_COMMA.search(remainder)
+        if not boundary:
+            before = sentence[: exclusion.start()]
+            if TIME.search(before) or MONEY.search(before):
+                boundary = EXCEPTION_RULE_BOUNDARY.search(remainder)
+        if not boundary:
+            continue
+        specific = remainder[boundary.end() :].strip()
+        # A medida da regra geral nunca é transportada para a regra específica.
+        # O reconhecimento posterior ainda exige a ação correta e uma atribuição direta.
+        if RULE_MARKER.search(specific) and (TIME.search(specific) or MONEY.search(specific)):
+            scopes.append(affirmative_scope(specific))
+    yield from (scope for scope in dict.fromkeys(scopes) if scope)
 
 
 def normalize_terms(value):
@@ -135,12 +164,12 @@ def support_assertions(excerpt, question, scope):
     sentences = re.split(r"(?<=[.!?;])\s+", " ".join(excerpt.split()))
     kind = quantity_kind(question)
     for sentence in sentences:
-        sentence = affirmative_scope(sentence)
-        if not sentence or UNCERTAIN.search(sentence):
-            continue
-        if kind and not direct_quantity(sentence, question, scope, kind):
-            continue
-        normalized = normalize_terms(sentence)
-        if kind == "deadline":
-            normalized += " prazo"
-        yield normalized + " " + normalize_terms(scope)
+        for statement in affirmative_scopes(sentence):
+            if UNCERTAIN.search(statement):
+                continue
+            if kind and not direct_quantity(statement, question, scope, kind):
+                continue
+            normalized = normalize_terms(statement)
+            if kind == "deadline":
+                normalized += " prazo"
+            yield normalized + " " + normalize_terms(scope)

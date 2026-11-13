@@ -9,6 +9,7 @@ from app.contracts import Claim
 from app.db import get_engine
 from app.ingestion import enqueue
 from app.main import app
+from app.question_support import support_assertions
 from app.worker import process_one
 from conftest import make_pdf
 from fastapi.testclient import TestClient
@@ -565,6 +566,7 @@ def test_negation_of_another_action_does_not_cancel_succession(reader, topic, de
         "O prazo de férias é de 45 dias, à exceção do cancelamento.",
         "O prazo de férias é de 45 dias, ressalvado o cancelamento.",
         "Salvo em caso de cancelamento, o prazo de férias é de 45 dias.",
+        "Salvo em situação em que haja cancelamento, o prazo de férias é de 45 dias.",
         "O prazo de férias, salvo em caso de cancelamento, é de 45 dias.",
     ],
 )
@@ -601,4 +603,74 @@ def test_exception_qualifier_does_not_hide_explicit_rule_for_requested_action(re
     ingest(topic, [literal])
     result = ask(reader, topic, "Qual o prazo para cancelar férias?")
     assert result["status"] == "supported" and not result["gaps"]
+    assert result["claims"][0]["text"] == literal
+
+
+@pytest.mark.parametrize(
+    ("question", "literal", "specific", "general"),
+    [
+        (
+            "Qual o prazo para cancelar férias?",
+            "O prazo de férias é de 45 dias, salvo em caso de cancelamento, quando o prazo para cancelar férias é de 5 dias úteis.",
+            "5 dias úteis",
+            "45 dias",
+        ),
+        (
+            "Qual o prazo para cancelar férias?",
+            "O prazo de férias é de 45 dias, exceto em caso de cancelamento, quando o prazo para cancelar férias é de 5 dias úteis.",
+            "5 dias úteis",
+            "45 dias",
+        ),
+        (
+            "Qual o prazo para cancelar férias?",
+            "O prazo de férias é de 45 dias, ressalvado o cancelamento, hipótese em que o prazo para cancelar férias é de 5 dias úteis.",
+            "5 dias úteis",
+            "45 dias",
+        ),
+        (
+            "Qual o prazo para cancelar férias?",
+            "O prazo de férias é de 45 dias, salvo cancelamento, cujo prazo para cancelar férias é de 5 dias úteis.",
+            "5 dias úteis",
+            "45 dias",
+        ),
+        (
+            "Qual o prazo para cancelar férias?",
+            "O prazo de férias é de 45 dias, salvo cancelamento quando o prazo para cancelar férias é de 5 dias úteis.",
+            "5 dias úteis",
+            "45 dias",
+        ),
+        (
+            "Qual o valor de cancelamento de locação?",
+            "O valor de locação é de R$ 900,00, salvo em caso de cancelamento, quando o valor de cancelamento de locação é de R$ 120,00.",
+            "r$ 120,00",
+            "r$ 900,00",
+        ),
+    ],
+)
+def test_same_sentence_exception_supplies_own_explicit_measure(reader, topic, question, literal, specific, general):
+    ingest(topic, [literal])
+    result = ask(reader, topic, question)
+    assert result["status"] == "supported" and not result["gaps"]
+    assert result["claims"][0]["text"] == literal
+    assert result["claims"][0]["citations"][0]["excerpt"] == literal
+    # A confirmação tem de usar a medida específica, sem emprestar a medida geral.
+    evidence = list(support_assertions(literal, question, ""))
+    assert any(specific in assertion for assertion in evidence)
+    assert all(general not in assertion for assertion in evidence)
+
+
+@pytest.mark.parametrize(
+    "tail",
+    [
+        "quando o prazo deve ser consultado com a GGC.",
+        "quando o prazo para solicitar férias é de 5 dias úteis.",
+        "quando o prazo para cancelar férias difere dos 5 dias úteis para solicitar férias.",
+        "quando o prazo para cancelar férias não é de 5 dias úteis.",
+    ],
+)
+def test_exception_tail_without_confirmation_does_not_inherit_general_deadline(reader, topic, tail):
+    literal = "O prazo de férias é de 45 dias, salvo em caso de cancelamento, " + tail
+    ingest(topic, [literal])
+    result = ask(reader, topic, "Qual o prazo para cancelar férias?")
+    assert result["status"] == "partial" and result["gaps"]
     assert result["claims"][0]["text"] == literal
