@@ -251,6 +251,805 @@
         }
       }
     },
+    "/api/fatos": {
+      "get": {
+        "tags": [
+          "facts"
+        ],
+        "summary": "Facts",
+        "description": "Fatos curados para perspectivas, filtros e visuais. Obrigações e Riscos ainda não têm curadoria.",
+        "operationId": "facts_api_fatos_get",
+        "parameters": [
+          {
+            "name": "categoria",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Perspective"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "deadline = Prazos, value = Valores",
+              "title": "Categoria"
+            },
+            "description": "deadline = Prazos, value = Valores"
+          },
+          {
+            "name": "assunto",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ID do tema",
+              "title": "Assunto"
+            },
+            "description": "ID do tema"
+          },
+          {
+            "name": "area",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Area"
+            }
+          },
+          {
+            "name": "ipbot_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ipbot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CuratedFact"
+                  },
+                  "title": "Response Facts Api Fatos Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/fatos": {
+      "get": {
+        "tags": [
+          "facts"
+        ],
+        "summary": "Facts",
+        "operationId": "facts_fatos_get",
+        "parameters": [
+          {
+            "name": "categoria",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Perspective"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "deadline = Prazos, value = Valores",
+              "title": "Categoria"
+            },
+            "description": "deadline = Prazos, value = Valores"
+          },
+          {
+            "name": "assunto",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ID do tema",
+              "title": "Assunto"
+            },
+            "description": "ID do tema"
+          },
+          {
+            "name": "area",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Area"
+            }
+          },
+          {
+            "name": "ipbot_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ipbot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CuratedFact"
+                  },
+                  "title": "Response Facts Fatos Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/fatos/curadoria": {
+      "post": {
+        "tags": [
+          "facts"
+        ],
+        "summary": "Publish",
+        "description": "Publica o catálogo revisado para as edições já ingeridas; fatos sem fonte disponível ficam pendentes.",
+        "operationId": "publish_api_fatos_curadoria_post",
+        "parameters": [
+          {
+            "name": "ipbot_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ipbot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurationReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/regras/ferias/prazos": {
+      "post": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Vacation Schedule",
+        "operationId": "vacation_schedule_api_regras_ferias_prazos_post",
+        "parameters": [
+          {
+            "name": "ipbot_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ipbot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VacationScheduleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Fatos necessários ao cálculo ainda não foram curados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ferias/calcular": {
+      "post": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Vacation Schedule",
+        "operationId": "vacation_schedule_ferias_calcular_post",
+        "parameters": [
+          {
+            "name": "ipbot_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ipbot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VacationScheduleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Fatos necessários ao cálculo ainda não foram curados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/regras/ferias/ausencia-simultanea": {
+      "post": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Simultaneous Absence",
+        "operationId": "simultaneous_absence_api_regras_ferias_ausencia_simultanea_post",
+        "parameters": [
+          {
+            "name": "ipbot_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ipbot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamAbsenceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Fatos necessários ao cálculo ainda não foram curados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/regras/ferias/dias-por-faltas": {
+      "post": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Vacation Days",
+        "operationId": "vacation_days_api_regras_ferias_dias_por_faltas_post",
+        "parameters": [
+          {
+            "name": "ipbot_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ipbot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnjustifiedAbsencesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Fatos necessários ao cálculo ainda não foram curados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/regras/ferias/ressarcimento": {
+      "post": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Reimbursement",
+        "operationId": "reimbursement_api_regras_ferias_ressarcimento_post",
+        "parameters": [
+          {
+            "name": "ipbot_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ipbot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AmountRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Fatos necessários ao cálculo ainda não foram curados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/regras/inovacao/alcada": {
+      "post": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Approval Authority",
+        "operationId": "approval_authority_api_regras_inovacao_alcada_post",
+        "parameters": [
+          {
+            "name": "ipbot_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ipbot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AmountRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Fatos necessários ao cálculo ainda não foram curados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/regras/inovacao/orcamento": {
+      "get": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Budget",
+        "operationId": "budget_api_regras_inovacao_orcamento_get",
+        "parameters": [
+          {
+            "name": "ipbot_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ipbot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Fatos necessários ao cálculo ainda não foram curados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/regras/inovacao/pagamento-premiacao": {
+      "get": {
+        "tags": [
+          "rules"
+        ],
+        "summary": "Prize Payment",
+        "operationId": "prize_payment_api_regras_inovacao_pagamento_premiacao_get",
+        "parameters": [
+          {
+            "name": "ipbot_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ipbot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Fatos necessários ao cálculo ainda não foram curados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health/live": {
       "get": {
         "tags": [
@@ -965,6 +1764,22 @@
         ],
         "title": "APIError"
       },
+      "AmountRequest": {
+        "properties": {
+          "amount": {
+            "type": "number",
+            "maximum": 1000000000.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Amount"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "amount"
+        ],
+        "title": "AmountRequest"
+      },
       "AuthCallbackRequest": {
         "properties": {
           "token": {
@@ -1216,6 +2031,256 @@
           "citations"
         ],
         "title": "Claim"
+      },
+      "CuratedFact": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key",
+            "description": "Identificador estável no catálogo de curadoria"
+          },
+          "topic_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Topic Id"
+          },
+          "topic": {
+            "type": "string",
+            "title": "Topic"
+          },
+          "category": {
+            "$ref": "#/components/schemas/Perspective"
+          },
+          "attribute": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attribute",
+            "description": "Atributo normalizado para comparar o mesmo fato entre fontes"
+          },
+          "area": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Area",
+            "description": "Unidade ou papel responsável, usado no filtro por área"
+          },
+          "statement": {
+            "type": "string",
+            "title": "Statement"
+          },
+          "responsible": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responsible"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value",
+            "description": "Valor numérico para cálculos e gráficos; o texto da fonte fica em value_text"
+          },
+          "value_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Text",
+            "description": "Valor como aparece na fonte, com a unidade original"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "starts_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts On"
+          },
+          "ends_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends On"
+          },
+          "conditions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conditions"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "curated_by": {
+            "type": "string",
+            "title": "Curated By"
+          },
+          "curated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Curated At"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/Citation"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Citations"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "topic_id",
+          "topic",
+          "category",
+          "attribute",
+          "area",
+          "statement",
+          "responsible",
+          "value",
+          "value_text",
+          "unit",
+          "conditions",
+          "tags",
+          "curated_by",
+          "curated_at",
+          "citations"
+        ],
+        "title": "CuratedFact",
+        "description": "Fato revisado manualmente; cada citação aponta para o trecho literal da edição publicada."
+      },
+      "CurationItem": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "published",
+              "pending"
+            ],
+            "title": "Status"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "key",
+          "status"
+        ],
+        "title": "CurationItem"
+      },
+      "CurationReport": {
+        "properties": {
+          "published": {
+            "type": "integer",
+            "title": "Published"
+          },
+          "pending": {
+            "type": "integer",
+            "title": "Pending"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CurationItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "published",
+          "pending",
+          "items"
+        ],
+        "title": "CurationReport"
       },
       "DemoAssertion": {
         "properties": {
@@ -1722,6 +2787,130 @@
         ],
         "title": "Role"
       },
+      "RuleResult": {
+        "properties": {
+          "rule": {
+            "type": "string",
+            "title": "Rule"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/RuleStep"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "assumptions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Assumptions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "rule",
+          "steps"
+        ],
+        "title": "RuleResult"
+      },
+      "RuleStep": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "rule": {
+            "type": "string",
+            "title": "Rule"
+          },
+          "result_text": {
+            "type": "string",
+            "title": "Result Text"
+          },
+          "result_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Date"
+          },
+          "result_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Value"
+          },
+          "computation": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Computation"
+          },
+          "fact_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Fact Keys"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/Citation"
+            },
+            "type": "array",
+            "title": "Citations"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "label",
+          "rule",
+          "result_text",
+          "computation",
+          "fact_keys",
+          "citations"
+        ],
+        "title": "RuleStep",
+        "description": "Um resultado calculado em código, com a demonstração e as fontes dos parâmetros usados."
+      },
+      "TeamAbsenceRequest": {
+        "properties": {
+          "team_size": {
+            "type": "integer",
+            "maximum": 100000.0,
+            "minimum": 1.0,
+            "title": "Team Size"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "team_size"
+        ],
+        "title": "TeamAbsenceRequest"
+      },
       "Topic": {
         "properties": {
           "id": {
@@ -1758,6 +2947,74 @@
           "name"
         ],
         "title": "TopicRequest"
+      },
+      "UnjustifiedAbsencesRequest": {
+        "properties": {
+          "absences": {
+            "type": "integer",
+            "maximum": 366.0,
+            "minimum": 0.0,
+            "title": "Absences"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "absences"
+        ],
+        "title": "UnjustifiedAbsencesRequest"
+      },
+      "VacationScheduleRequest": {
+        "properties": {
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Start Date",
+            "description": "Início de gozo (D)"
+          },
+          "holidays": {
+            "items": {
+              "type": "string",
+              "format": "date"
+            },
+            "type": "array",
+            "maxItems": 366,
+            "title": "Holidays",
+            "description": "Feriados da sede; o acervo não traz o calendário"
+          },
+          "request_registered_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Registered On",
+            "description": "Data de registro da solicitação"
+          },
+          "notice_received_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notice Received On",
+            "description": "Data de recebimento do aviso"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "start_date"
+        ],
+        "title": "VacationScheduleRequest"
       },
       "ValidationError": {
         "properties": {

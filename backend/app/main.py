@@ -26,13 +26,17 @@ from app.contracts import (
     TopicRequest,
 )
 from app.db import get_engine, get_migration_config
+from app.fatos.api import router as facts_router
 from app.ingestion import InvalidDocument, enqueue
 from app.questions import answer, citation_by_id
+from app.regras.api import router as rules_router
 
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="IPBOT API", version="0.1.0")
 app.include_router(auth_router)
+app.include_router(facts_router)
+app.include_router(rules_router)
 
 
 @app.get("/health/live", tags=["health"])
