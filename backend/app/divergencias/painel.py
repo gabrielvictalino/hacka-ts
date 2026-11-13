@@ -14,10 +14,12 @@ from app.contracts import (
     TopicDivergences,
 )
 from app.divergencias.catalogo import CURATION_NOTE, CURATOR, DIVERGENCES, REVIEWED_ON, CuratedDivergence
+from app.document_parser import SECTION
 from app.fatos.catalogo import Source
 from app.fatos.curadoria import find_quote
 from app.questions import CITATION_COLUMNS, CITATION_JOINS, verified_citation
-from app.vigencia.situacao import version_states
+from app.vigencia.painel import PRECEDENCE
+from app.vigencia.situacao import is_affirmative, version_states
 
 NOT_APPLICABLE = {"a_iniciar", "encerrada", "substituida"}
 STATUS_TEXT = {
@@ -49,24 +51,54 @@ def _edition(states, source: Source):
     return found[0][1] if found else None
 
 
-def _cite(connection, edition, source: Source) -> tuple[Citation | None, str | None]:
-    """Cita o trecho literal revisado na edição, página e item exatos; outro item da página não serve."""
+def _item_before(excerpt: str, position: int) -> str | None:
+    """Último item numerado que antecede a posição no texto do trecho."""
+    found = list(SECTION.finditer(excerpt[:position]))
+    return found[-1]["section"].rstrip(".") if found else None
+
+
+def _cite(connection, edition, source: Source) -> tuple[Citation | None, str | None, str | None]:
+    """Cita o trecho literal revisado na edição, página e item exatos; outro item da página não serve.
+
+    Trechos legados, gravados sem `section`, valem quando o item revisado é o último que antecede a frase.
+    Devolve também o texto completo do trecho, para validar o contexto da frase.
+    """
     rows = (
         connection.execute(
             text(f"""SELECT {CITATION_COLUMNS}, p.text AS page_text {CITATION_JOINS}
-                WHERE v.id=:version AND p.physical_page=:page AND s.section=:item ORDER BY s.ordinal"""),
+                WHERE v.id=:version AND p.physical_page=:page AND (s.section=:item OR s.section IS NULL)
+                ORDER BY (s.section IS NOT NULL) DESC, s.ordinal"""),
             {"version": edition, "page": source.page, "item": source.item},
         )
         .mappings()
         .all()
     )
-    if not rows:
-        return None, f"{_label(source)}: item não localizado na página publicada."
     for row in rows:
         literal = find_quote(row["excerpt"], source.quote)
-        if literal and (citation := verified_citation(row)):
-            return citation.model_copy(update={"excerpt": literal, "section": source.item}), None
-    return None, f"{_label(source)}: trecho revisado não encontrado no item publicado."
+        if not literal:
+            continue
+        if row["section"] is None and _item_before(row["excerpt"], row["excerpt"].index(literal)) != source.item:
+            continue
+        if citation := verified_citation(row):
+            return citation.model_copy(update={"excerpt": literal, "section": source.item}), None, row["excerpt"]
+    return None, f"{_label(source)}: trecho revisado não encontrado no item publicado.", None
+
+
+def _affirms_precedence(context: str, literal: str, code: str) -> bool:
+    """A frase curada só vale se declarar a precedência sem negação, como na tela de vigência."""
+    quote = " ".join(literal.split())
+    for sentence in re.split(r"(?<=[.!?;])\s+(?=[^”\"'])", " ".join(context.split())):
+        if quote not in sentence:
+            continue
+        for match in PRECEDENCE.finditer(sentence):
+            if match["code"].casefold() == code.casefold() and is_affirmative(sentence, match):
+                return True
+    return False
+
+
+def _confirmed(state) -> bool:
+    """Aplicação confirmada na data; a fase declarada sem data de início não basta."""
+    return state.applicable and state.status != "fase_declarada"
 
 
 def _present(connection, topic_id, divergence: CuratedDivergence, states, reference):
@@ -81,7 +113,7 @@ def _present(connection, topic_id, divergence: CuratedDivergence, states, refere
         # A vigência vale para a edição mesmo quando o trecho revisado não é localizado.
         state = states[edition]
         editions[edition] = (source, state)
-        citation, reason = _cite(connection, edition, source)
+        citation, reason, _ = _cite(connection, edition, source)
         if citation is None:
             missing.append(reason)
             continue
@@ -90,7 +122,7 @@ def _present(connection, topic_id, divergence: CuratedDivergence, states, refere
                 role=item.role,
                 guidance=item.guidance,
                 status=state.status,
-                applicable=state.applicable,
+                applicable=_confirmed(state),
                 citation=citation,
             )
         )
@@ -100,13 +132,18 @@ def _present(connection, topic_id, divergence: CuratedDivergence, states, refere
     precedence = None
     if divergence.precedence:
         edition = _edition(states, divergence.precedence.source)
-        citation, reason = (
+        citation, reason, context = (
             _cite(connection, edition, divergence.precedence.source)
             if edition
-            else (None, f"{_label(divergence.precedence.source)}: edição não publicada no tema.")
+            else (None, f"{_label(divergence.precedence.source)}: edição não publicada no tema.", None)
         )
         if citation is None:
             missing.append(f"Precedência declarada não localizada. {reason}")
+        elif not _affirms_precedence(context, citation.excerpt, divergence.precedence.prevailing_code):
+            missing.append(
+                f"Precedência não confirmada: {_label(divergence.precedence.source)} não declara de forma "
+                f"afirmativa que prevalece a {divergence.precedence.prevailing_code}."
+            )
         else:
             prevailing = connection.execute(
                 text("SELECT id FROM documents WHERE topic_id=:topic AND lower(code)=lower(:code)"),
@@ -116,7 +153,7 @@ def _present(connection, topic_id, divergence: CuratedDivergence, states, refere
                 prevailing_code=divergence.precedence.prevailing_code,
                 prevailing_document_id=prevailing,
                 statement=divergence.precedence.statement,
-                applicable=states[citation.version_id].applicable,
+                applicable=_confirmed(states[citation.version_id]),
                 citation=citation,
             )
 

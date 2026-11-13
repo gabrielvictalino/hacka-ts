@@ -44,14 +44,17 @@ function DivergenceCard({ divergence, onOpen }: { divergence: SourceDivergence; 
       {divergence.guidances.map(g => <div className="passage" key={g.citation.passage_id}>
         <p><strong>{g.role}</strong>: {g.guidance}</p>
         <blockquote>{g.citation.excerpt}</blockquote>
-        {!g.applicable && <p className="notice">Edição sem aplicação na data de referência.</p>}
+        {!g.applicable && <p className="notice">{g.status === "fase_declarada"
+          ? "Vigência sem data de início: aplicação não confirmada na data de referência."
+          : "Edição sem aplicação na data de referência."}</p>}
         <button className="link-button" onClick={() => onOpen(g.citation)}>Conferir {citationLabel(g.citation)}</button>
       </div>)}
     </div>
     {divergence.precedence ? <div className="precedence">
       <p>Precedência declarada: prevalece a <strong>{divergence.precedence.prevailing_code}</strong>
         {divergence.precedence.prevailing_document_id ? "" : " (documento fora do acervo)"}. {divergence.precedence.statement}
-        {" "}O IPBOT mostra a regra declarada e não escolhe uma das orientações.</p>
+        {" "}O IPBOT mostra a regra declarada e não escolhe uma das orientações.
+        {!divergence.precedence.applicable && " A aplicação da edição que declara a precedência não está confirmada na data."}</p>
       <button className="link-button" onClick={() => onOpen(divergence.precedence!.citation)}>
         Conferir {citationLabel(divergence.precedence.citation)}</button>
     </div> : <p className="notice">Precedência entre as fontes não confirmada.</p>}

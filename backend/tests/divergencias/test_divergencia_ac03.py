@@ -318,4 +318,50 @@ def test_edition_without_start_date_is_not_confirmed(client, topic):
     ingest(topic, "PX_1111-001.pdf", [f"{PX_HEADER}\n{PRECEDENCE}", "8.3. Decidir.", PX_NOTICE])
     (divergence,) = details(client, topic)["divergences"]
     assert divergence["status"] == "possible" and len(divergence["guidances"]) == 2
+    norm, procedure = divergence["guidances"]
+    assert (norm["status"], norm["applicable"]) == ("fase_declarada", False)
+    assert procedure["applicable"] and divergence["precedence"]["applicable"]
     assert any("NG_111 v3.0.0" in item and "data de início" in item for item in divergence["missing_information"])
+
+
+def drop_sections(topic):
+    """Simula trechos gravados pelo worker da fundação, sem `section`."""
+    with get_engine().begin() as connection:
+        connection.execute(
+            text("""UPDATE passages s SET section=NULL FROM pages p JOIN document_versions v ON v.id=p.version_id
+                WHERE s.page_id=p.id AND v.topic_id=:topic"""),
+            {"topic": topic},
+        )
+
+
+def test_legacy_passages_without_section_keep_their_citations(client, topic):
+    acervo(topic)
+    before = details(client, topic)["divergences"][0]
+    drop_sections(topic)
+    (after,) = details(client, topic)["divergences"]
+    assert after["status"] == "confirmed" and after["precedence"] is not None
+
+    def ids(d):
+        return [g["citation"]["passage_id"] for g in d["guidances"]] + [d["precedence"]["citation"]["passage_id"]]
+
+    assert ids(after) == ids(before)
+    assert [g["citation"]["section"] for g in after["guidances"]] == ["4.5.3", "8.4.2"]
+
+
+def test_legacy_passage_under_another_item_is_not_cited(client, topic):
+    moved = """8.4.2. Cabe à GGC registrar o aviso.
+8.4.3. Se a solicitação foi aprovada com menos de 35 dias para o início, a GGC
+emite o aviso no dia seguinte à aprovação."""
+    acervo(topic, px_notice=moved)
+    drop_sections(topic)
+    (divergence,) = details(client, topic)["divergences"]
+    assert divergence["status"] == "possible"
+    assert [g["citation"]["code"] for g in divergence["guidances"]] == ["NG_111"]
+
+
+def test_negated_precedence_is_not_presented(client, topic):
+    negated = "2.2. Não se confirma que a afirmação a seguir seja verdadeira: “Em divergência, prevalece a NG_111.”"
+    acervo(topic, precedence=negated)
+    (divergence,) = details(client, topic)["divergences"]
+    assert divergence["precedence"] is None
+    assert any("Precedência não confirmada" in item for item in divergence["missing_information"])
