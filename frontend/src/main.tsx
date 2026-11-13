@@ -6,6 +6,7 @@ import "./app.css";
 import { ManagementPanel } from "./ManagementPanel";
 import { QuestionPanel } from "./QuestionPanel";
 import { ValidityPanel } from "./ValidityPanel";
+import { VIEWS } from "./views";
 import { DivergencePanel } from "./DivergencePanel";
 
 type Identity = components["schemas"]["Identity"];
@@ -13,7 +14,7 @@ type DemoAssertion = components["schemas"]["DemoAssertion"];
 type Topic = components["schemas"]["Topic"];
 type Area = "consulta" | "gestao";
 
-const views = ["Empregado", "Gestor", "Diretoria ou apoio", "Estagiário ou aprendiz"];
+const views: readonly string[] = VIEWS;
 
 function defaultView(identity: Identity) {
   return identity.role === "empregado" ? views[0] : views[1];
@@ -128,8 +129,8 @@ function App() {
       </section>
       {topics.length === 0 && <section><p>Nenhum tema importado. {can(identity, "documents:ingest")
         ? "Envie documentos pela Gestão ou importe o acervo." : "Peça à Gestão do acervo para importar os documentos."}</p></section>}
-      {identity && <QuestionPanel key={identity.subject} topics={topics} view={view} />}
-      {identity && <ValidityPanel key={`validity-${identity.subject}`} topics={topics} />}
+      <QuestionPanel key={identity.subject} topics={topics} view={view} />
+      <ValidityPanel key={`validity-${identity.subject}`} topics={topics} />
     </div>}
     {identity && management && <div hidden={area !== "gestao"}>
       {can(identity, "documents:ingest") &&

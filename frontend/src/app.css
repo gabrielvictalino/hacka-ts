@@ -12,6 +12,8 @@
 a.link-button { display: inline-block; border-radius: 6px; text-decoration: none; }
 .link-button:disabled { opacity: .5; }
 
+.intern-view { border: 1px solid #d9e4dd; border-left: 4px solid #b38530; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; }
+.intern-view h3 { margin-top: 0; }
 .new-topic { margin: 8px 0 16px; }
 .new-topic summary { cursor: pointer; color: #17645b; }
 .new-topic form { margin-top: 12px; }

@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { components } from "../../packages/contracts";
+import { createLatest, retryOutcome } from "./managementState";
 
 type Topic = components["schemas"]["Topic"];
 type DocumentVersion = components["schemas"]["DocumentVersion"];
 type BatchFileResult = components["schemas"]["BatchFileResult"];
 type IngestionResult = components["schemas"]["IngestionResult"];
 
-// Mesmo limite do backend (MAX_UPLOAD_BYTES); o servidor continua sendo a validação definitiva.
-const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 const POLL_MS = 2000;
 
 const statusLabels: Record<DocumentVersion["status"], string> = {
@@ -98,40 +97,49 @@ export function ManagementPanel({ topics, onTopicsChanged }: {
   const [status, setStatus] = useState("");
   const [retrying, setRetrying] = useState<string | null>(null);
   const [retryErrors, setRetryErrors] = useState<Record<string, string>>({});
+  const [resultsTopic, setResultsTopic] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
   const topicId = topic || topics[0]?.id || "";
   const topicName = topics.find(t => t.id === topicId)?.name;
+  // Tema exibido agora: as respostas são aceitas só se ainda corresponderem a ele.
+  const currentTopic = useRef(topicId);
+  currentTopic.current = topicId;
+  const latest = useRef(createLatest());
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    if (!topicId) { setVersions(null); return; }
+  const load = useCallback(async () => {
+    const key = currentTopic.current;
+    if (!key) { latest.current.cancel(); setVersions(null); setLoading(false); return; }
+    const request = latest.current.begin(key);
+    const current = () => latest.current.isCurrent(request, currentTopic.current);
     setLoading(true);
     try {
-      const response = await fetch(`/api/documents?${new URLSearchParams({ topic_id: topicId })}`, { signal });
+      const response = await fetch(`/api/documents?${new URLSearchParams({ topic_id: key })}`, { signal: request.signal });
       if (!response.ok) throw new Error(permissionError(response) || "Não foi possível carregar os documentos do tema.");
-      setVersions(await response.json());
+      const received: DocumentVersion[] = await response.json();
+      if (!current()) return;
+      setVersions(received);
       setError("");
     } catch (e) {
-      if (!signal?.aborted) setError(e instanceof Error ? e.message : "Não foi possível carregar os documentos.");
+      if (current()) setError(e instanceof Error ? e.message : "Não foi possível carregar os documentos.");
     } finally {
-      if (!signal?.aborted) setLoading(false);
+      if (current()) setLoading(false);
     }
-  }, [topicId]);
+  }, []);
 
   useEffect(() => {
-    const controller = new AbortController();
     setVersions(null); setResults([]); setRetryErrors({});
-    load(controller.signal);
-    return () => controller.abort();
-  }, [load]);
+    load();
+  }, [topicId, load]);
+  useEffect(() => () => latest.current.cancel(), []);
 
-  // Acompanha o processamento enquanto houver arquivos na fila ou em extração.
+  // Acompanha o processamento enquanto houver fila. Cada leitura só é agendada depois que a anterior
+  // termina, então o polling não sobrepõe requisições mesmo com o servidor lento.
   const pending = versions?.some(v => v.status === "queued" || v.status === "processing") ?? false;
   useEffect(() => {
-    if (!pending) return;
-    const controller = new AbortController();
-    const timer = window.setInterval(() => load(controller.signal), POLL_MS);
-    return () => { window.clearInterval(timer); controller.abort(); };
-  }, [pending, load]);
+    if (!pending || loading) return;
+    const timer = window.setTimeout(() => { load(); }, POLL_MS);
+    return () => window.clearTimeout(timer);
+  }, [pending, loading, versions, load]);
 
   function choose(list: FileList | null) {
     setResults([]); setError("");
@@ -140,19 +148,19 @@ export function ManagementPanel({ topics, onTopicsChanged }: {
 
   async function upload(event: FormEvent) {
     event.preventDefault();
-    const accepted = files.filter(f => f.size <= MAX_UPLOAD_BYTES);
-    const rejected = files.filter(f => f.size > MAX_UPLOAD_BYTES)
-      .map(f => ({ filename: f.name, error: "Arquivo acima de 25 MiB; reduza o tamanho e envie novamente." }));
-    if (!topicId || !accepted.length) { setResults(rejected); return; }
-    setBusy(true); setError(""); setStatus(`Enviando ${accepted.length} arquivo(s)…`);
+    if (!topicId || !files.length) return;
+    // O limite de tamanho é validado pelo servidor, que devolve o motivo por arquivo.
+    const target = topicName || "";
+    setBusy(true); setError(""); setStatus(`Enviando ${files.length} arquivo(s)…`);
     try {
       const body = new FormData();
       body.append("topic_id", topicId);
-      accepted.forEach(f => body.append("files", f, f.name));
+      files.forEach(f => body.append("files", f, f.name));
       const response = await fetch("/api/documents/batch", { method: "POST", body });
       if (!response.ok) throw new Error(permissionError(response) || await detail(response, "Não foi possível enviar os arquivos."));
       const received: BatchFileResult[] = await response.json();
-      setResults([...received, ...rejected]);
+      setResults(received);
+      setResultsTopic(target);
       setFiles([]);
       if (fileInput.current) fileInput.current.value = "";
       setStatus("Envio concluído. Acompanhe o processamento na lista abaixo.");
@@ -175,7 +183,13 @@ export function ManagementPanel({ topics, onTopicsChanged }: {
         setRetryErrors(current => ({ ...current, [id]: message }));
         return;
       }
-      setStatus("Arquivo recolocado na fila de processamento.");
+      // HTTP 202 não garante reenfileiramento: o IngestionResult diz o que aconteceu.
+      const outcome = retryOutcome(await response.json() as IngestionResult);
+      if (outcome.kind === "failed") {
+        setRetryErrors(current => ({ ...current, [id]: outcome.message }));
+        return;
+      }
+      setStatus(outcome.message);
       await load();
     } catch {
       setRetryErrors(current => ({ ...current, [id]: "Não foi possível conectar ao servidor. Tente novamente." }));
@@ -236,7 +250,7 @@ export function ManagementPanel({ topics, onTopicsChanged }: {
     {error && <p role="alert">{error}</p>}
     <p role="status" className="muted">{status}</p>
     {results.length > 0 && <div aria-live="polite">
-      <h3>Resultado do envio</h3>
+      <h3>Resultado do envio{resultsTopic ? ` para ${resultsTopic}` : ""}</h3>
       <ul className="upload-results">{results.map((item, index) => <ResultLine key={`${item.filename}-${index}`} item={item} />)}</ul>
     </div>}
 

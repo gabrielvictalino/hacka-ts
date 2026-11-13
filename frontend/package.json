@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "contracts:generate": "openapi-typescript ../packages/contracts/openapi.json -o ../packages/contracts/index.d.ts"
+    "contracts:generate": "openapi-typescript ../packages/contracts/openapi.json -o ../packages/contracts/index.d.ts",
+    "test": "node --experimental-strip-types --test tests/*.test.ts"
   },
   "dependencies": {
     "react": "19.1.0",

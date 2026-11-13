@@ -3,7 +3,8 @@ import type { FormEvent } from "react";
 import type { components } from "../../packages/contracts";
 import { buildCalculation, CalculationFields, emptyCalculation } from "./CalculationFields";
 import { DivergenceNotices } from "./DivergencePanel";
-import { EvidencePanel } from "./Evidence";
+import { EvidencePanel, citationLabel } from "./Evidence";
+import { INTERN_QUERY, INTERN_VIEW, internPassages } from "./views";
 
 type Topic = components["schemas"]["Topic"];
 type Result = components["schemas"]["QuestionResponse"];
@@ -12,7 +13,7 @@ type Perspective = components["schemas"]["Perspective"];
 const statuses = { supported: "Sustentada por trechos", partial: "Resposta parcial", insufficient: "Sem evidência suficiente", divergent: "Divergência" };
 
 function Gaps({ gaps }: { gaps: string[] }) {
-  return <><h3>Pontos sem confirmação</h3><ul>{gaps.map(gap => <li key={gap}>{gap}</li>)}</ul></>;
+  return <><h3>Pontos sem confirmação</h3><ul>{gaps.map((gap, index) => <li key={`${index}-${gap}`}>{gap}</li>)}</ul></>;
 }
 
 export function QuestionPanel({ topics, view }: { topics: Topic[]; view: string }) {
@@ -24,6 +25,39 @@ export function QuestionPanel({ topics, view }: { topics: Topic[]; view: string 
   const [calculation, setCalculation] = useState(emptyCalculation);
   const [result, setResult] = useState<Result | null>(null);
   const [context, setContext] = useState("");
+  // Visão usada naquela consulta; trocar o "Ver para" depois não altera um resultado já exibido.
+  const [resultView, setResultView] = useState("");
+  const [interns, setInterns] = useState<{ topic: string; passages: Citation[] } | null>(null);
+  const [internEvidence, setInternEvidence] = useState<Citation | null>(null);
+  const [internBusy, setInternBusy] = useState(false);
+  const [internError, setInternError] = useState("");
+  const internPanel = useRef<HTMLElement>(null);
+  const internHeading = useRef<HTMLHeadingElement>(null);
+  const topicId = topic || topics[0]?.id || "";
+  const topicName = topics.find(t => t.id === topicId)?.name || "";
+  const internKey = `${topicId}|${view}`;
+  const currentInternKey = useRef(internKey);
+  currentInternKey.current = internKey;
+  useEffect(() => { setInterns(null); setInternEvidence(null); setInternError(""); }, [internKey]);
+  useEffect(() => { if (internEvidence) internPanel.current?.focus(); }, [internEvidence]);
+  async function loadInterns() {
+    const askedTopic = topicId, askedName = topicName, askedKey = internKey;
+    const stillCurrent = () => currentInternKey.current === askedKey;
+    setInternBusy(true); setInternError("");
+    try {
+      const response = await fetch("/perguntar", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic_id: askedTopic, question: INTERN_QUERY, reference_date: date || null }),
+      });
+      if (!response.ok) throw new Error("Não foi possível consultar o tema. Tente novamente.");
+      const passages = internPassages(await response.json());
+      if (!stillCurrent()) return;
+      setInterns({ topic: askedName, passages });
+      setInternEvidence(null);
+    } catch (e) {
+      if (stillCurrent()) setInternError(e instanceof Error ? e.message : "Não foi possível consultar o tema.");
+    } finally { setInternBusy(false); }
+  }
   const [evidence, setEvidence] = useState<Citation | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -34,6 +68,7 @@ export function QuestionPanel({ topics, view }: { topics: Topic[]; view: string 
   const unconfirmed = result?.status === "partial" || result?.status === "insufficient";
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError("");
+    const askedView = view;
     try {
       const requestedCalculation = buildCalculation(calculation);
       const response = await fetch("/perguntar", {
@@ -48,11 +83,32 @@ export function QuestionPanel({ topics, view }: { topics: Topic[]; view: string 
       }
       setResult(await response.json()); setEvidence(null);
       setContext(`${topics.find(t => t.id === (topic || topics[0]?.id))?.name} · ${question}`);
+      setResultView(askedView);
     } catch (e) { setError(e instanceof Error ? e.message : "Não foi possível consultar. Tente novamente."); }
     finally { setBusy(false); }
   }
   return <section aria-labelledby="question-title">
     <h2 id="question-title">Perguntar ao acervo</h2>
+    {view === INTERN_VIEW && <div className="intern-view" aria-labelledby="intern-title">
+      <h3 id="intern-title" ref={internHeading} tabIndex={-1}>Visão de estagiário ou aprendiz</h3>
+      <p>Mostra só o que os documentos do tema dizem sobre estagiários e aprendizes, com a fonte.</p>
+      <button type="button" disabled={internBusy || !topicId} onClick={loadInterns}>
+        {internBusy ? "Consultando…" : `Ver o que ${topicName || "o tema"} diz sobre estagiários e aprendizes`}</button>
+      {internError && <p role="alert">{internError}</p>}
+      {interns && <div aria-live="polite">
+        {interns.passages.length > 0
+          ? <p>Trechos de {interns.topic} que mencionam estagiários ou aprendizes. O IPBOT não completa regras para esta
+            visão: o que não aparece nesses trechos não foi encontrado nos documentos do tema.</p>
+          : <p>Nenhum trecho de {interns.topic} encontrado na busca menciona estagiários ou aprendizes. O IPBOT não
+            completa regras para esta visão.</p>}
+        {interns.passages.map((c, at) => <article className="claim" key={`${at}-${c.passage_id}`}>
+          <blockquote>{c.excerpt}</blockquote>
+          <button onClick={() => setInternEvidence(c)}>Conferir {citationLabel(c)}</button>
+        </article>)}
+        {internEvidence && <EvidencePanel ref={internPanel} evidence={internEvidence} closeLabel="Voltar à visão"
+          onClose={() => { setInternEvidence(null); internHeading.current?.focus(); }} />}
+      </div>}
+    </div>}
     <form onSubmit={submit}>
       <label>Tema<select required disabled={busy || !topics.length} value={topic || topics[0]?.id || ""}
         onChange={e => { setTopic(e.target.value); setCalculation(emptyCalculation()); }}>
@@ -88,25 +144,25 @@ export function QuestionPanel({ topics, view }: { topics: Topic[]; view: string 
       {result.claims.map((claim, index) => <article className="claim" key={index}>
         {claim.calculation_step != null && <p>Resultado calculado · passo {claim.calculation_step + 1}</p>}
         <blockquote>{claim.text}</blockquote>
-        {claim.citations.map(c => <button key={`${c.passage_id}:${c.section}:${c.excerpt}`} onClick={() => setEvidence(c)}>
+        {claim.citations.map((c, at) => <button key={`${at}-${c.passage_id}`} onClick={() => setEvidence(c)}>
           Conferir {c.code || c.title} · {c.version || "versão não identificada"} · p. {c.physical_page}{c.section ? ` · ${c.section}` : ""}
         </button>)}
       </article>)}
       {!unconfirmed && result.gaps.length > 0 && <Gaps gaps={result.gaps} />}
-      <p className="muted">{context}{view ? ` · Visão: ${view}` : ""}</p>
+      <p className="muted">{context}{resultView ? ` · Visão: ${resultView}` : ""}</p>
       <p className="muted">{result.mode === "extractive" ? "Modo extrativo" : "Seleção de trechos por modelo"} · Referência: {result.reference_date}</p>
       <p className="muted">{result.calculation
         ? "Os resultados foram calculados a partir das regras publicadas. Confira a memória de cálculo, as premissas e as fontes."
         : "Os trechos são literais. A correspondência textual não confirma interpretações além do que a fonte declara."}</p>
       {result.passages.length > 0 && <details><summary>Todas as fontes recuperadas ({result.passages.length})</summary>
-        <ul>{result.passages.map(c => <li key={c.passage_id}><button onClick={() => setEvidence(c)}>
+        <ul>{result.passages.map((c, at) => <li key={`${at}-${c.passage_id}`}><button onClick={() => setEvidence(c)}>
           {c.code || c.title} · {c.version || "versão não identificada"} · p. {c.physical_page}
         </button></li>)}</ul>
       </details>}
       {result.calculation && <>
-        {(result.calculation.warnings ?? []).map(warning => <p role="status" key={warning}>{warning}</p>)}
+        {(result.calculation.warnings ?? []).map((warning, at) => <p role="status" key={`${at}-${warning}`}>{warning}</p>)}
         {(result.calculation.assumptions?.length ?? 0) > 0 && <><h3>Premissas do cálculo</h3>
-          <ul>{result.calculation.assumptions?.map(assumption => <li key={assumption}>{assumption}</li>)}</ul></>}
+          <ul>{result.calculation.assumptions?.map((assumption, at) => <li key={`${at}-${assumption}`}>{assumption}</li>)}</ul></>}
       </>}
       {evidence && <EvidencePanel ref={evidencePanel} evidence={evidence} closeLabel="Voltar à resposta"
         onClose={() => { setEvidence(null); resultHeading.current?.focus(); }} />}
