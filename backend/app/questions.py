@@ -14,8 +14,8 @@ from app.calculations import answer_calculation
 from app.config import get_settings
 from app.contracts import Citation, Claim, QuestionRequest, QuestionResponse
 from app.db import get_engine
-from app.document_parser import CODE
 from app.question_support import normalize_terms, search_terms, support_assertions
+from app.vigencia.situacao import version_states
 
 logger = logging.getLogger(__name__)
 # Palavras de formulação da pergunta não são requisitos de evidência.
@@ -30,38 +30,6 @@ PERSPECTIVES = {
     "obligation": "deve deverá obrigatório responsável obrigação",
     "risk": "risco penalidade multa vedado proibido",
 }
-SUCCESSION = re.compile(
-    rf"\bsubstitui\s+(?:a\s+)?(?:(?P<code>{CODE})\s+)?"
-    r"(?:versão\s*|v\s*)(?P<version>\d+(?:\.\d+)*)\b",
-    re.I,
-)
-# A negação deve governar a declaração, não outra ação da mesma frase.
-NEGATED_SUCCESSION = re.compile(r"\b(não|nunca|jamais|tampouco|nem)\b", re.I)
-UNCONFIRMED_PROPOSITION = re.compile(
-    r"\b(?:não|nunca|jamais|tampouco)\s+(?:se\s+)?(?:(?:deve|pode)\s+)?"
-    r"(?:confirm\w*|afirm\w*|comprov\w*|garant\w*|assegur\w*|conclu\w*)\b.*\bque\b",
-    re.I | re.S,
-)
-REJECTED_PROPOSITION = re.compile(r"^\s*[,\"”']*\s*não\s+(?:procede|é\s+verdadeira|se\s+confirma)", re.I)
-
-
-def affirmative_successions(header):
-    for sentence in re.split(r"(?<=[.!?;])\s+", header):
-        for declaration in SUCCESSION.finditer(sentence):
-            # Vírgulas podem delimitar um inciso, sem encerrar o alcance de “não”.
-            prefix = re.sub(r",[^,]*,|\([^)]*\)", " ", sentence[: declaration.start()])
-            prefix = re.split(r"\b(?:mas|porém)\b", prefix, flags=re.I)[-1]
-            # A negação de “confirma/afirma que” governa também verbos coordenados.
-            if UNCONFIRMED_PROPOSITION.search(prefix):
-                continue
-            prefix = re.split(r"\be\b", prefix, flags=re.I)[-1]
-            if NEGATED_SUCCESSION.search(prefix):
-                continue
-            if REJECTED_PROPOSITION.search(sentence[declaration.end() :]):
-                continue
-            yield declaration
-
-
 CITATION_COLUMNS = """v.id AS version_id, v.document_id, s.id AS passage_id,
     COALESCE(v.title, d.title, v.filename) AS title, d.code, v.version,
     p.physical_page, s.excerpt, s.section, v.document_type, v.document_layer,
@@ -93,55 +61,8 @@ def verified_citation(row):
 
 
 def eligible_versions(connection, topic_id, reference):
-    versions = (
-        connection.execute(
-            text("""
-        SELECT v.id, v.document_id, v.version, v.status, v.valid_from, v.valid_until,
-               v.superseded_by, v.declared_phase, d.code, COALESCE(p.text, '') AS header
-        FROM document_versions v JOIN documents d ON d.id=v.document_id LEFT JOIN pages p ON p.version_id=v.id AND p.physical_page=1
-        WHERE v.topic_id=:topic
-    """),
-            {"topic": topic_id},
-        )
-        .mappings()
-        .all()
-    )
-    ready = {v["id"]: v for v in versions if v["status"] == "ready"}
-    eligible = []
-    for version in ready.values():
-        if version["valid_from"] and version["valid_from"] > reference:
-            continue
-        if version["valid_until"] and version["valid_until"] < reference:
-            continue
-        successors = []
-        if version["superseded_by"] in ready:
-            successors.append(ready[version["superseded_by"]])
-        # Só sucessão declarada, nunca maior número de versão ou data de upload.
-        for successor in ready.values():
-            if successor["document_id"] != version["document_id"] or successor["id"] == version["id"]:
-                continue
-            for declaration in affirmative_successions(successor["header"]):
-                code = declaration["code"]
-                if code and code.casefold() != (version["code"] or "").casefold():
-                    continue
-                old = declaration["version"]
-                matches = [
-                    v
-                    for v in ready.values()
-                    if v["document_id"] == version["document_id"]
-                    and v["version"]
-                    and (v["version"] == old or v["version"].startswith(old + "."))
-                ]
-                if len(matches) == 1 and matches[0]["id"] == version["id"]:
-                    successors.append(successor)
-        if any(s["valid_from"] is not None and s["valid_from"] <= reference for s in successors):
-            continue
-        # Sem início confirmado não se inventa a data de entrada da sucessora.
-        if version["declared_phase"] and re.search(r"anterior|substituíd", version["declared_phase"], re.I):
-            if not version["valid_from"] or not successors or any(s["valid_from"] is None for s in successors):
-                continue
-        eligible.append(version["id"])
-    return eligible
+    # A mesma classificação alimenta a consulta e a tela de vigência.
+    return [vid for vid, state in version_states(connection, topic_id, reference).items() if state.applicable]
 
 
 def reference_date(body):

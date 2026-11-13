@@ -177,6 +177,94 @@ class CurationReport(Contract):
     items: list[CurationItem]
 
 
+ValidityStatus = Literal["em_vigor", "fase_declarada", "a_iniciar", "encerrada", "substituida", "sem_confirmacao"]
+
+
+class Succession(Contract):
+    """Sucessão declarada pela edição sucessora; a anterior continua consultável como fonte histórica."""
+
+    version_id: UUID = Field(description="A outra edição da relação")
+    version: str | None
+    valid_from: date | None
+    in_effect: bool = Field(description="A sucessora já começou na data de referência")
+    citation: Citation | None = Field(description="Trecho da sucessora que declara a substituição")
+
+
+class VersionValidity(Contract):
+    version_id: UUID
+    version: str | None
+    title: str
+    declared_phase: str | None = Field(description="Rótulo impresso; não prova aplicação em uma data")
+    valid_from: date | None
+    valid_until: date | None
+    linked_codes: list[str]
+    status: ValidityStatus = Field(
+        description="Situação na data de referência: em_vigor (intervalo documentado), fase_declarada (sem datas), "
+        "a_iniciar, encerrada, substituida ou sem_confirmacao"
+    )
+    applicable: bool = Field(description="Elegível para respostas na data de referência")
+    explanation: str
+    superseded_by: list[Succession]
+    supersedes: list[Succession]
+    header_citation: Citation | None = Field(description="Cabeçalho com fase e vigência impressas")
+
+
+class DocumentLink(Contract):
+    code: str
+    document_id: UUID | None = Field(description="Documento do mesmo tema; nulo quando não consta do acervo")
+
+
+class PrecedenceDeclaration(Contract):
+    prevailing_code: str
+    prevailing_document_id: UUID | None
+    applicable: bool = Field(description="A edição que declara a precedência é aplicável na data de referência")
+    citation: Citation
+
+
+class DocumentValidity(Contract):
+    document_id: UUID
+    code: str | None
+    title: str
+    document_type: str | None
+    document_layer: str | None
+    current_version_ids: list[UUID]
+    notice: str | None
+    links: list[DocumentLink]
+    precedence: list[PrecedenceDeclaration]
+    versions: list[VersionValidity]
+
+
+class VersionChange(Contract):
+    """Mudança curada entre edições do mesmo documento; não é divergência entre fontes aplicáveis."""
+
+    key: str
+    kind: Literal["version_change"] = "version_change"
+    code: str
+    attribute: str
+    summary: str
+    from_version: str
+    to_version: str
+    from_version_id: UUID | None
+    to_version_id: UUID | None
+    before_text: str
+    after_text: str
+    previous_available: bool = Field(description="O PDF da edição anterior consta do tema")
+    in_effect: bool = Field(description="A edição nova é aplicável na data de referência")
+    to_status: ValidityStatus = Field(description="Situação da edição nova na data de referência")
+    to_valid_from: date | None = Field(description="Início documentado da edição nova")
+    to_valid_until: date | None = Field(description="Fim documentado da edição nova")
+    note: str | None
+    before_citations: list[Citation]
+    after_citations: list[Citation] = Field(min_length=1)
+
+
+class TopicValidity(Contract):
+    topic_id: UUID
+    reference_date: date
+    documents: list[DocumentValidity]
+    changes: list[VersionChange]
+
+
 class RuleStep(Contract):
     """Um resultado calculado em código, com a demonstração e as fontes dos parâmetros usados."""
 

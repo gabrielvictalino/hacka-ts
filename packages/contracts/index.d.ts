@@ -299,6 +299,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/vigencia": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Validity
+         * @description Situação temporal, camada, vínculos, precedência declarada e mudanças entre versões do tema, com as fontes de cada informação.
+         */
+        get: operations["validity_api_vigencia_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vigencia": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Validity */
+        get: operations["validity_vigencia_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health/live": {
         parameters: {
             query?: never;
@@ -730,6 +767,42 @@ export interface components {
             /** Citations */
             citations: components["schemas"]["Citation"][];
         };
+        /** DocumentLink */
+        DocumentLink: {
+            /** Code */
+            code: string;
+            /**
+             * Document Id
+             * @description Documento do mesmo tema; nulo quando não consta do acervo
+             */
+            document_id: string | null;
+        };
+        /** DocumentValidity */
+        DocumentValidity: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Code */
+            code: string | null;
+            /** Title */
+            title: string;
+            /** Document Type */
+            document_type: string | null;
+            /** Document Layer */
+            document_layer: string | null;
+            /** Current Version Ids */
+            current_version_ids: string[];
+            /** Notice */
+            notice: string | null;
+            /** Links */
+            links: components["schemas"]["DocumentLink"][];
+            /** Precedence */
+            precedence: components["schemas"]["PrecedenceDeclaration"][];
+            /** Versions */
+            versions: components["schemas"]["VersionValidity"][];
+        };
         /** DocumentVersion */
         DocumentVersion: {
             /**
@@ -826,6 +899,19 @@ export interface components {
          * @enum {string}
          */
         Perspective: "deadline" | "value" | "obligation" | "risk";
+        /** PrecedenceDeclaration */
+        PrecedenceDeclaration: {
+            /** Prevailing Code */
+            prevailing_code: string;
+            /** Prevailing Document Id */
+            prevailing_document_id: string | null;
+            /**
+             * Applicable
+             * @description A edição que declara a precedência é aplicável na data de referência
+             */
+            applicable: boolean;
+            citation: components["schemas"]["Citation"];
+        };
         /** PrizeCalculation */
         PrizeCalculation: {
             /**
@@ -932,6 +1018,29 @@ export interface components {
             /** Citations */
             citations: components["schemas"]["Citation"][];
         };
+        /**
+         * Succession
+         * @description Sucessão declarada pela edição sucessora; a anterior continua consultável como fonte histórica.
+         */
+        Succession: {
+            /**
+             * Version Id
+             * Format: uuid
+             * @description A outra edição da relação
+             */
+            version_id: string;
+            /** Version */
+            version: string | null;
+            /** Valid From */
+            valid_from: string | null;
+            /**
+             * In Effect
+             * @description A sucessora já começou na data de referência
+             */
+            in_effect: boolean;
+            /** @description Trecho da sucessora que declara a substituição */
+            citation: components["schemas"]["Citation"] | null;
+        };
         /** TeamAbsenceRequest */
         TeamAbsenceRequest: {
             /** Team Size */
@@ -961,6 +1070,23 @@ export interface components {
         TopicRequest: {
             /** Name */
             name: string;
+        };
+        /** TopicValidity */
+        TopicValidity: {
+            /**
+             * Topic Id
+             * Format: uuid
+             */
+            topic_id: string;
+            /**
+             * Reference Date
+             * Format: date
+             */
+            reference_date: string;
+            /** Documents */
+            documents: components["schemas"]["DocumentValidity"][];
+            /** Changes */
+            changes: components["schemas"]["VersionChange"][];
         };
         /** UnjustifiedAbsencesRequest */
         UnjustifiedAbsencesRequest: {
@@ -1043,6 +1169,112 @@ export interface components {
             type: string;
         } & {
             [key: string]: unknown;
+        };
+        /**
+         * VersionChange
+         * @description Mudança curada entre edições do mesmo documento; não é divergência entre fontes aplicáveis.
+         */
+        VersionChange: {
+            /** Key */
+            key: string;
+            /**
+             * Kind
+             * @default version_change
+             * @constant
+             */
+            kind: "version_change";
+            /** Code */
+            code: string;
+            /** Attribute */
+            attribute: string;
+            /** Summary */
+            summary: string;
+            /** From Version */
+            from_version: string;
+            /** To Version */
+            to_version: string;
+            /** From Version Id */
+            from_version_id: string | null;
+            /** To Version Id */
+            to_version_id: string | null;
+            /** Before Text */
+            before_text: string;
+            /** After Text */
+            after_text: string;
+            /**
+             * Previous Available
+             * @description O PDF da edição anterior consta do tema
+             */
+            previous_available: boolean;
+            /**
+             * In Effect
+             * @description A edição nova é aplicável na data de referência
+             */
+            in_effect: boolean;
+            /**
+             * To Status
+             * @description Situação da edição nova na data de referência
+             * @enum {string}
+             */
+            to_status: "em_vigor" | "fase_declarada" | "a_iniciar" | "encerrada" | "substituida" | "sem_confirmacao";
+            /**
+             * To Valid From
+             * @description Início documentado da edição nova
+             */
+            to_valid_from: string | null;
+            /**
+             * To Valid Until
+             * @description Fim documentado da edição nova
+             */
+            to_valid_until: string | null;
+            /** Note */
+            note: string | null;
+            /** Before Citations */
+            before_citations: components["schemas"]["Citation"][];
+            /** After Citations */
+            after_citations: components["schemas"]["Citation"][];
+        };
+        /** VersionValidity */
+        VersionValidity: {
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+            /** Version */
+            version: string | null;
+            /** Title */
+            title: string;
+            /**
+             * Declared Phase
+             * @description Rótulo impresso; não prova aplicação em uma data
+             */
+            declared_phase: string | null;
+            /** Valid From */
+            valid_from: string | null;
+            /** Valid Until */
+            valid_until: string | null;
+            /** Linked Codes */
+            linked_codes: string[];
+            /**
+             * Status
+             * @description Situação na data de referência: em_vigor (intervalo documentado), fase_declarada (sem datas), a_iniciar, encerrada, substituida ou sem_confirmacao
+             * @enum {string}
+             */
+            status: "em_vigor" | "fase_declarada" | "a_iniciar" | "encerrada" | "substituida" | "sem_confirmacao";
+            /**
+             * Applicable
+             * @description Elegível para respostas na data de referência
+             */
+            applicable: boolean;
+            /** Explanation */
+            explanation: string;
+            /** Superseded By */
+            superseded_by: components["schemas"]["Succession"][];
+            /** Supersedes */
+            supersedes: components["schemas"]["Succession"][];
+            /** @description Cabeçalho com fase e vigência impressas */
+            header_citation: components["schemas"]["Citation"] | null;
         };
     };
     responses: never;
@@ -1670,6 +1902,85 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    validity_api_vigencia_get: {
+        parameters: {
+            query: {
+                /** @description ID do tema */
+                topic_id: string;
+                /** @description Padrão: hoje em America/Recife */
+                reference_date?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                ipbot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopicValidity"];
+                };
+            };
+            /** @description Tema não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    validity_vigencia_get: {
+        parameters: {
+            query: {
+                /** @description ID do tema */
+                topic_id: string;
+                /** @description Padrão: hoje em America/Recife */
+                reference_date?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                ipbot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopicValidity"];
                 };
             };
             /** @description Validation Error */
