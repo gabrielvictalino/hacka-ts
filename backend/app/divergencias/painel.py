@@ -15,7 +15,7 @@ from app.contracts import (
 )
 from app.divergencias.catalogo import CURATION_NOTE, CURATOR, DIVERGENCES, REVIEWED_ON, CuratedDivergence
 from app.fatos.catalogo import Source
-from app.fatos.curadoria import resolve_source
+from app.fatos.curadoria import find_quote
 from app.questions import CITATION_COLUMNS, CITATION_JOINS, verified_citation
 from app.vigencia.situacao import version_states
 
@@ -36,34 +36,37 @@ def _label(source: Source) -> str:
     return f"{source.code} v{source.version}, p. {source.page}, item {source.item}"
 
 
-def _cite(connection, topic_id, source: Source) -> tuple[Citation | None, str | None]:
-    """Cita o trecho literal revisado na edição, página e item exatos; nunca outra edição do documento."""
-    resolved, reason = resolve_source(connection, topic_id, source)
-    if resolved is None:
-        return None, reason
-    passage_id, literal = resolved
-    row = (
+def _edition(states, source: Source):
+    """Edição revisada entre as já classificadas na data, por código e versão, independentemente do trecho.
+
+    Usar o mesmo conjunto da vigência evita citar uma edição publicada depois da classificação.
+    """
+    found = sorted(
+        (s.version["created_at"], vid)
+        for vid, s in states.items()
+        if (s.version["code"] or "").casefold() == source.code.casefold() and s.version["version"] == source.version
+    )
+    return found[0][1] if found else None
+
+
+def _cite(connection, edition, source: Source) -> tuple[Citation | None, str | None]:
+    """Cita o trecho literal revisado na edição, página e item exatos; outro item da página não serve."""
+    rows = (
         connection.execute(
-            text(f"SELECT {CITATION_COLUMNS}, p.text AS page_text {CITATION_JOINS} WHERE s.id=:id"),
-            {"id": passage_id},
+            text(f"""SELECT {CITATION_COLUMNS}, p.text AS page_text {CITATION_JOINS}
+                WHERE v.id=:version AND p.physical_page=:page AND s.section=:item ORDER BY s.ordinal"""),
+            {"version": edition, "page": source.page, "item": source.item},
         )
         .mappings()
-        .first()
+        .all()
     )
-    citation = verified_citation(row) if row else None
-    if citation is None:
-        return None, f"{_label(source)}: trecho não confere com a página publicada."
-    return citation.model_copy(update={"excerpt": literal, "section": source.item}), None
-
-
-def _edition(connection, topic_id, source: Source):
-    """Edição revisada publicada no tema, localizada por código e versão, independentemente do trecho."""
-    return connection.execute(
-        text("""SELECT v.id FROM document_versions v JOIN documents d ON d.id=v.document_id
-            WHERE v.topic_id=:topic AND d.code=:code AND v.version=:version AND v.status='ready'
-            ORDER BY v.created_at LIMIT 1"""),
-        {"topic": topic_id, "code": source.code, "version": source.version},
-    ).scalar()
+    if not rows:
+        return None, f"{_label(source)}: item não localizado na página publicada."
+    for row in rows:
+        literal = find_quote(row["excerpt"], source.quote)
+        if literal and (citation := verified_citation(row)):
+            return citation.model_copy(update={"excerpt": literal, "section": source.item}), None
+    return None, f"{_label(source)}: trecho revisado não encontrado no item publicado."
 
 
 def _present(connection, topic_id, divergence: CuratedDivergence, states, reference):
@@ -71,17 +74,17 @@ def _present(connection, topic_id, divergence: CuratedDivergence, states, refere
     guidances, missing, editions = [], [], {}
     for item in divergence.guidances:
         source = item.source
-        edition = _edition(connection, topic_id, source)
+        edition = _edition(states, source)
         if edition is None:
             missing.append(f"{source.code} v{source.version}: edição não publicada no tema.")
             continue
         # A vigência vale para a edição mesmo quando o trecho revisado não é localizado.
-        editions[edition] = (source, states[edition])
-        citation, reason = _cite(connection, topic_id, source)
+        state = states[edition]
+        editions[edition] = (source, state)
+        citation, reason = _cite(connection, edition, source)
         if citation is None:
             missing.append(reason)
             continue
-        state = states[citation.version_id]
         guidances.append(
             DivergentGuidance(
                 role=item.role,
@@ -96,7 +99,12 @@ def _present(connection, topic_id, divergence: CuratedDivergence, states, refere
 
     precedence = None
     if divergence.precedence:
-        citation, reason = _cite(connection, topic_id, divergence.precedence.source)
+        edition = _edition(states, divergence.precedence.source)
+        citation, reason = (
+            _cite(connection, edition, divergence.precedence.source)
+            if edition
+            else (None, f"{_label(divergence.precedence.source)}: edição não publicada no tema.")
+        )
         if citation is None:
             missing.append(f"Precedência declarada não localizada. {reason}")
         else:
@@ -113,12 +121,19 @@ def _present(connection, topic_id, divergence: CuratedDivergence, states, refere
             )
 
     inapplicable = [(s, st) for s, st in editions.values() if st.status in NOT_APPLICABLE]
-    unconfirmed = [(s, st) for s, st in editions.values() if not st.applicable and st.status not in NOT_APPLICABLE]
-    for source, _ in unconfirmed:
-        missing.append(
-            f"{source.code} v{source.version}: aplicação em {_br(reference)} não confirmada "
-            "pelas datas e sucessões documentadas."
+    # Sem data de início, a fase declarada não confirma a aplicação na data consultada.
+    unconfirmed = [
+        (s, st)
+        for s, st in editions.values()
+        if st.status not in NOT_APPLICABLE and (not st.applicable or st.status == "fase_declarada")
+    ]
+    for source, state in unconfirmed:
+        reason = (
+            "data de início da vigência não informada no cabeçalho"
+            if state.status == "fase_declarada"
+            else "não confirmada pelas datas e sucessões documentadas"
         )
+        missing.append(f"{source.code} v{source.version}: aplicação em {_br(reference)} {reason}.")
     if inapplicable:
         status = "not_applicable"
         listed = "; ".join(f"{s.code} v{s.version} {STATUS_TEXT[st.status]}" for s, st in inapplicable)

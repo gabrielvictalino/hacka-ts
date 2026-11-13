@@ -125,12 +125,16 @@ export function ValidityPanel({ topics }: { topics: Topic[] }) {
     try {
       const params = new URLSearchParams({ topic_id: topicId });
       if (date) params.set("reference_date", date);
-      const [response, warnings] = await Promise.all([
-        fetch(`/api/vigencia?${params}`), fetch(`/api/divergencias/avisos?${params}`)]);
+      // O aviso curto é complementar: qualquer falha nele vira lista vazia, sem descartar a vigência.
+      const warnings = fetch(`/api/divergencias/avisos?${params}`)
+        .then(r => r.ok ? r.json() as Promise<DivergenceNotice[]> : [])
+        .catch(() => [] as DivergenceNotice[]);
+      const response = await fetch(`/api/vigencia?${params}`);
       if (!response.ok) throw new Error("Não foi possível carregar a vigência do tema.");
-      setResult(await response.json()); setEvidence(null);
-      // O aviso curto é complementar: a vigência continua disponível se ele falhar.
-      setNotices(warnings.ok ? await warnings.json() : []);
+      const validity: TopicValidity = await response.json();
+      const current = await warnings;
+      // Vigência e avisos da mesma consulta são trocados juntos.
+      setResult(validity); setNotices(current); setEvidence(null);
     } catch (e) { setError(e instanceof Error ? e.message : "Não foi possível carregar a vigência."); }
     finally { setBusy(false); }
   }

@@ -298,3 +298,24 @@ def test_calculation_citing_the_notice_deadline_gets_the_divergence_notice(clien
     finally:
         with get_engine().begin() as connection:
             connection.execute(text("DELETE FROM curated_facts WHERE topic_id=:id"), {"id": topic})
+
+
+def test_quote_under_another_item_is_not_cited_as_the_reviewed_item(client, topic):
+    moved = """8.4. Emitir o aviso (até D-35).
+8.4.2. Cabe à GGC registrar o aviso.
+8.4.3. Se a solicitação foi aprovada com menos de 35 dias para o início, a GGC
+emite o aviso no dia seguinte à aprovação."""
+    acervo(topic, px_notice=moved)
+    (divergence,) = details(client, topic)["divergences"]
+    assert divergence["status"] == "possible"
+    assert [g["citation"]["code"] for g in divergence["guidances"]] == ["NG_111"]
+    assert any("8.4.2" in item for item in divergence["missing_information"])
+
+
+def test_edition_without_start_date_is_not_confirmed(client, topic):
+    undated = NG_HEADER.replace("Fase: Vigente Vigência: 03/08/2026 a 03/02/2028", "Fase: Vigente")
+    ingest(topic, "NG_111.pdf", [undated, "4.3.1. Solicitação com 45 dias.", NG_NOTICE])
+    ingest(topic, "PX_1111-001.pdf", [f"{PX_HEADER}\n{PRECEDENCE}", "8.3. Decidir.", PX_NOTICE])
+    (divergence,) = details(client, topic)["divergences"]
+    assert divergence["status"] == "possible" and len(divergence["guidances"]) == 2
+    assert any("NG_111 v3.0.0" in item and "data de início" in item for item in divergence["missing_information"])
