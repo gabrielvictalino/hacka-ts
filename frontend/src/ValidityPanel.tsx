@@ -138,7 +138,7 @@ export function ValidityPanel({ topics }: { topics: Topic[] }) {
     } catch (e) { setError(e instanceof Error ? e.message : "Não foi possível carregar a vigência."); }
     finally { setBusy(false); }
   }
-  return <section aria-labelledby="validity-title">
+  return <section className="panel stack" aria-labelledby="validity-title">
     <h2 id="validity-title">Vigência, camadas e versões</h2>
     <p>Fase declarada, datas de vigência e substituição aparecem separadas. O rótulo “Vigente” não prova aplicação em qualquer data.</p>
     <form onSubmit={load}>

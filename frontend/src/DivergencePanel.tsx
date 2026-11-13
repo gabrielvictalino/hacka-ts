@@ -90,8 +90,8 @@ export function DivergencePanel({ topics }: { topics: Topic[] }) {
     } catch (e) { setError(e instanceof Error ? e.message : "Não foi possível carregar as divergências."); }
     finally { setBusy(false); }
   }
-  return <section aria-labelledby="divergence-title">
-    <h2 id="divergence-title">Gestão · Divergências entre fontes</h2>
+  return <section className="panel stack" aria-labelledby="divergence-title">
+    <h2 id="divergence-title">Divergências entre fontes</h2>
     <p>Divergência entre fontes aplicáveis ao mesmo cenário. Mudanças entre versões do mesmo documento aparecem
       separadas, na vigência.</p>
     <form onSubmit={load}>
