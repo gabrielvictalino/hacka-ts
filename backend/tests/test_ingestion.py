@@ -3,8 +3,7 @@ from datetime import date
 from uuid import uuid4
 
 import pytest
-from app.auth import issue_demo_token
-from app.config import get_settings
+from app.config import DemoAccount, get_settings
 from app.db import get_engine
 from app.document_parser import page_passages, read_header
 from app.ingestion import enqueue
@@ -12,7 +11,9 @@ from app.main import app
 from app.worker import process_one
 from conftest import make_pdf
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 HEADER = """Documento: Norma Geral
 Título: Férias
@@ -38,16 +39,19 @@ def queue(topic, pages):
 @pytest.fixture
 def client(monkeypatch):
     monkeypatch.setattr(get_settings(), "auth_demo_enabled", True)
+    monkeypatch.setattr(get_settings(), "auth_demo_sso_secret", SecretStr("s" * 32))
+    monkeypatch.setattr(get_settings(), "auth_cookie_secure", False)
     monkeypatch.setattr(
         get_settings(),
         "auth_demo_users",
         {
-            "reader": {"name": "Consulta", "role": "empregado"},
-            "curator": {"name": "Gestão", "role": "gestao"},
+            "reader": DemoAccount(name="Consulta", groups=["clause-empregados"]),
+            "manager": DemoAccount(name="Gestor", groups=["clause-gestores"]),
+            "curator": DemoAccount(name="Gestão", groups=["clause-gestao-acervo"]),
         },
     )
     with TestClient(app) as client:
-        client.cookies.set("ipbot_session", issue_demo_token("curator"))
+        assert client.post("/api/auth/demo/session", json={"user_id": "curator"}).status_code == 200
         yield client
 
 
@@ -184,7 +188,7 @@ def test_batch_isolates_rejections_and_retry_requires_management(topic, client):
     invalid, _ = queue(topic, [""])
     assert process_one() and process_one()
     assert client.post(f"/api/documents/{invalid.version_id}/retry").json()["status"] == "queued"
-    client.cookies.set("ipbot_session", issue_demo_token("reader"))
+    assert client.post("/api/auth/demo/session", json={"user_id": "reader"}).status_code == 200
     assert client.post("/api/documents/batch", data=data, files=files).status_code == 403
     assert client.post(f"/api/documents/{invalid.version_id}/retry").status_code == 403
     assert client.post("/api/topics", json={"name": "Proibido"}).status_code == 403
@@ -214,3 +218,69 @@ def test_create_topic_trims_name_and_is_idempotent(topic, client):
     assert client.post("/api/topics", json={"name": f" {name} "}).json()["id"] == str(topic)
     assert client.post("/api/topics", json={"name": "   "}).status_code == 422
     assert client.post(f"/api/documents/{uuid4()}/retry").status_code == 404
+
+
+def test_batch_database_failure_keeps_committed_files_and_continues(topic, client, monkeypatch):
+    from app import main
+
+    original_enqueue = main.enqueue
+    attempted = []
+
+    def fail_middle(connection, topic_id, filename, content):
+        attempted.append(filename)
+        result = original_enqueue(connection, topic_id, filename, content)
+        if filename == "middle.pdf":
+            raise SQLAlchemyError("Mensagem interna do banco não deve aparecer na resposta")
+        return result
+
+    monkeypatch.setattr(main, "enqueue", fail_middle)
+    response = client.post(
+        "/api/documents/batch",
+        data={"topic_id": str(topic)},
+        files=[("files", (name, make_pdf([name]))) for name in ("first.pdf", "middle.pdf", "last.pdf")],
+    )
+    assert response.status_code == 202
+    first, middle, last = response.json()
+    assert attempted == ["first.pdf", "middle.pdf", "last.pdf"]
+    assert first["result"]["status"] == last["result"]["status"] == "queued"
+    assert first["error"] is last["error"] is None
+    assert middle["result"] is None and "Banco indisponível" in middle["error"]
+    assert "Mensagem interna" not in response.text
+    with get_engine().connect() as connection:
+        filenames = (
+            connection.execute(
+                text("SELECT filename FROM document_versions WHERE topic_id=:id ORDER BY filename"),
+                {"id": topic},
+            )
+            .scalars()
+            .all()
+        )
+    assert filenames == ["first.pdf", "last.pdf"]
+
+
+@pytest.mark.parametrize("subject, expected", [(None, 401), ("reader", 403), ("manager", 403), ("curator", 202)])
+def test_ingestion_routes_use_current_sso_permissions(topic, client, subject, expected):
+    result, content = queue(topic, ["Documento para verificar autorização."])
+    client.cookies.clear()
+    if subject:
+        assert client.post("/api/auth/demo/session", json={"user_id": subject}).status_code == 200
+    assert (
+        client.post(
+            "/api/documents",
+            data={"topic_id": str(topic)},
+            files={"file": ("norma.pdf", content)},
+        ).status_code
+        == expected
+    )
+    assert (
+        client.post(
+            "/api/documents/batch",
+            data={"topic_id": str(topic)},
+            files={"files": ("norma.pdf", content)},
+        ).status_code
+        == expected
+    )
+    assert client.post(f"/api/documents/{result.version_id}/retry").status_code == expected
+    with get_engine().connect() as connection:
+        name = connection.execute(text("SELECT name FROM topics WHERE id=:id"), {"id": topic}).scalar_one()
+    assert client.post("/api/topics", json={"name": name}).status_code == (200 if expected == 202 else expected)

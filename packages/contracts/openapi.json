@@ -5,44 +5,6 @@
     "version": "0.1.0"
   },
   "paths": {
-    "/health/live": {
-      "get": {
-        "tags": [
-          "health"
-        ],
-        "summary": "Live",
-        "operationId": "live_health_live_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/health/ready": {
-      "get": {
-        "tags": [
-          "health"
-        ],
-        "summary": "Ready",
-        "operationId": "ready_health_ready_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/auth/demo/users": {
       "get": {
         "tags": [
@@ -61,6 +23,88 @@
                   },
                   "type": "array",
                   "title": "Response Demo Users Api Auth Demo Users Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/demo/assertion": {
+      "post": {
+        "tags": [
+          "identity"
+        ],
+        "summary": "Demo Assertion",
+        "operationId": "demo_assertion_api_auth_demo_assertion_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DemoSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoAssertion"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/callback": {
+      "post": {
+        "tags": [
+          "identity"
+        ],
+        "summary": "Auth Callback",
+        "operationId": "auth_callback_auth_callback_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthCallbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Identity"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -152,6 +196,93 @@
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/eu": {
+      "get": {
+        "tags": [
+          "identity"
+        ],
+        "summary": "Me",
+        "operationId": "me_eu_get",
+        "parameters": [
+          {
+            "name": "ipbot_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ipbot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Identity"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/live": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Live",
+        "operationId": "live_health_live_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Ready",
+        "operationId": "ready_health_ready_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           }
@@ -641,6 +772,56 @@
           }
         }
       }
+    },
+    "/conflitos": {
+      "get": {
+        "tags": [
+          "management"
+        ],
+        "summary": "Management Alerts",
+        "operationId": "management_alerts_conflitos_get",
+        "parameters": [
+          {
+            "name": "ipbot_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ipbot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "501": {
+            "description": "Detalhes dos alertas serão implementados na issue #15"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -668,6 +849,22 @@
           "detail"
         ],
         "title": "APIError"
+      },
+      "AuthCallbackRequest": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 8192,
+            "minLength": 1,
+            "title": "Token"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "title": "AuthCallbackRequest"
       },
       "BatchFileResult": {
         "properties": {
@@ -841,6 +1038,20 @@
           "citations"
         ],
         "title": "Claim"
+      },
+      "DemoAssertion": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "title": "DemoAssertion"
       },
       "DemoSessionRequest": {
         "properties": {
@@ -1163,7 +1374,8 @@
         "enum": [
           "documents:read",
           "documents:ingest",
-          "facts:curate"
+          "facts:curate",
+          "alerts:read-details"
         ],
         "title": "Permission"
       },

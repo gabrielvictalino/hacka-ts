@@ -1,5 +1,4 @@
 import hashlib
-import json
 import logging
 import signal
 import sys
@@ -12,8 +11,8 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import get_settings
 from app.db import get_engine
-from app.document_parser import page_passages, read_header
-from app.ingestion import InvalidDocument, extract_pages
+from app.document_parser import page_passages
+from app.ingestion import InvalidDocument, extract_pages, update_metadata
 
 logger = logging.getLogger(__name__)
 HEARTBEAT = Path("/tmp/ipbot-worker-heartbeat")
@@ -29,28 +28,6 @@ def _progress(version_id, **values):
 
 
 def _publish(connection, job, pages):
-    metadata = read_header(pages[0])
-    document_id = job["document_id"]
-    if metadata["code"]:
-        # Upsert serializa edições do mesmo código, inclusive entre workers.
-        document_id = connection.execute(
-            text("""INSERT INTO documents(id, topic_id, title, code)
-                VALUES (:id, :topic_id, :title, :code)
-                ON CONFLICT(topic_id, code) DO UPDATE SET code=EXCLUDED.code RETURNING id"""),
-            {
-                "id": uuid4(),
-                "topic_id": job["topic_id"],
-                "title": metadata["title"] or job["filename"],
-                "code": metadata["code"],
-            },
-        ).scalar_one()
-        conflict = connection.execute(
-            text("""SELECT id FROM document_versions WHERE document_id=:document AND version=:version
-                AND status='ready' AND id<>:id"""),
-            {"document": document_id, "version": metadata["version"], "id": job["id"]},
-        ).scalar()
-        if conflict:
-            raise InvalidDocument("Código e versão já publicados com outro conteúdo. Confira a edição do documento.")
     section = None
     for physical_page, page_text in enumerate(pages, start=1):
         page_id = uuid4()
@@ -66,25 +43,12 @@ def _publish(connection, job, pages):
                 {"id": uuid4(), "page": page_id, "ordinal": ordinal, "excerpt": excerpt, "section": section},
             )
         _progress(job["id"], processed_pages=physical_page, page_count=len(pages))
+    update_metadata(connection, job, pages[0])
     connection.execute(
-        text("""UPDATE document_versions SET document_id=:document_id, title=:title, version=:version,
-            document_type=:document_type, document_layer=:document_layer, declared_phase=:declared_phase,
-            valid_from=:valid_from, valid_until=:valid_until, linked_codes=CAST(:linked_codes AS jsonb),
-            status='ready', error=NULL, page_count=:count, processed_at=now() WHERE id=:id"""),
-        {
-            **metadata,
-            "linked_codes": json.dumps(metadata["linked_codes"]),
-            "id": job["id"],
-            "document_id": document_id,
-            "count": len(pages),
-        },
+        text("""UPDATE document_versions SET status='ready', error=NULL, page_count=:count,
+            processed_at=now() WHERE id=:id"""),
+        {"id": job["id"], "count": len(pages)},
     )
-    if document_id != job["document_id"]:
-        connection.execute(
-            text("""DELETE FROM documents WHERE id=:id AND NOT EXISTS
-                (SELECT 1 FROM document_versions WHERE document_id=:id)"""),
-            {"id": job["document_id"]},
-        )
 
 
 def process_one() -> bool:

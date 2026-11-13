@@ -1,4 +1,5 @@
 import hashlib
+import json
 import os
 from io import BytesIO
 from pathlib import Path
@@ -9,11 +10,62 @@ from sqlalchemy import text
 
 from app.config import get_settings
 from app.contracts import IngestionResult
-from app.document_parser import page_passages
+from app.document_parser import page_passages, read_header
 
 
 class InvalidDocument(ValueError):
     pass
+
+
+def update_metadata(connection, job, first_page: str) -> None:
+    """Enriquece a edição sem alterar páginas, trechos ou referências curadas."""
+    metadata = read_header(first_page)
+    metadata["title"] = metadata["title"] or job["filename"]
+    document_id = job["document_id"]
+    if metadata["code"]:
+        # Upsert serializa edições do mesmo código, inclusive entre workers.
+        document_id = connection.execute(
+            text("""INSERT INTO documents(id, topic_id, title, code)
+                VALUES (:id, :topic_id, :title, :code)
+                ON CONFLICT(topic_id, code) DO UPDATE SET code=EXCLUDED.code RETURNING id"""),
+            {"id": uuid4(), "topic_id": job["topic_id"], "title": metadata["title"], "code": metadata["code"]},
+        ).scalar_one()
+        conflict = connection.execute(
+            text("""SELECT id FROM document_versions WHERE document_id=:document AND version=:version
+                AND status='ready' AND id<>:id"""),
+            {"document": document_id, "version": metadata["version"], "id": job["id"]},
+        ).scalar()
+        if conflict:
+            raise InvalidDocument("Código e versão já publicados com outro conteúdo. Confira a edição do documento.")
+    connection.execute(
+        text("""UPDATE document_versions SET document_id=:document_id, title=:title, version=:version,
+            document_type=:document_type, document_layer=:document_layer, declared_phase=:declared_phase,
+            valid_from=:valid_from, valid_until=:valid_until, linked_codes=CAST(:linked_codes AS jsonb),
+            processed_pages=CASE WHEN status='ready' THEN page_count ELSE processed_pages END
+            WHERE id=:id"""),
+        {**metadata, "linked_codes": json.dumps(metadata["linked_codes"]), "id": job["id"], "document_id": document_id},
+    )
+    if document_id != job["document_id"]:
+        connection.execute(
+            text("""DELETE FROM documents WHERE id=:id AND NOT EXISTS
+                (SELECT 1 FROM document_versions WHERE document_id=:id)"""),
+            {"id": job["document_id"]},
+        )
+
+
+def backfill_metadata(connection) -> None:
+    # Usa o texto já publicado: não depende do original em disco nem recorta citações novamente.
+    versions = (
+        connection.execute(
+            text("""SELECT v.id, v.document_id, v.topic_id, v.filename, p.text FROM document_versions v
+            JOIN pages p ON p.version_id=v.id AND p.physical_page=1
+            WHERE v.status='ready' AND v.title IS NULL ORDER BY v.topic_id, v.id FOR UPDATE OF v"""),
+        )
+        .mappings()
+        .all()
+    )
+    for version in versions:
+        update_metadata(connection, version, version["text"])
 
 
 def enqueue(connection, topic_id: UUID, filename: str, content: bytes) -> IngestionResult:
@@ -38,7 +90,7 @@ def enqueue(connection, topic_id: UUID, filename: str, content: bytes) -> Ingest
     previous = (
         connection.execute(
             text("""
-        SELECT id, status, error FROM document_versions WHERE topic_id=:topic AND sha256=:sha FOR UPDATE
+        SELECT id, document_id, topic_id, filename, title, status, error FROM document_versions WHERE topic_id=:topic AND sha256=:sha FOR UPDATE
     """),
             {"topic": topic_id, "sha": digest},
         )
@@ -52,6 +104,12 @@ def enqueue(connection, topic_id: UUID, filename: str, content: bytes) -> Ingest
     if not target.is_file() or hashlib.sha256(target.read_bytes()).hexdigest() != digest:
         _store_original(target, content)
     if previous:
+        if previous["status"] == "ready" and previous["title"] is None:
+            first_page = connection.execute(
+                text("SELECT text FROM pages WHERE version_id=:id AND physical_page=1"),
+                previous,
+            ).scalar_one()
+            update_metadata(connection, previous, first_page)
         if previous["status"] == "failed":
             connection.execute(
                 text(

@@ -1,0 +1,158 @@
+import hashlib
+from uuid import uuid4
+
+import pytest
+from alembic import command
+from app.db import get_engine, get_migration_config
+from app.ingestion import backfill_metadata, enqueue, extract_pages
+from conftest import make_pdf
+from sqlalchemy import text
+
+HEADER = """Documento: Norma Geral
+Título: Férias
+Sigla e Número: NG_111 Versão: {version}
+Fase: {phase} Vigência: 03/08/2026 a 03/02/2028
+Vinculado a: PX_1111-001
+DOCUMENTO SINTÉTICO.
+4.3.1. Solicitação com antecedência mínima de 45 dias corridos.
+"""
+
+
+def seed_legacy(topic, version, title="Férias"):
+    content = make_pdf([HEADER.format(version=version, phase="Vigente").replace("Título: Férias", f"Título: {title}")])
+    page_text = extract_pages(content)[0]
+    document_id, version_id, page_id, passage_id = (uuid4() for _ in range(4))
+    digest = hashlib.sha256(content).hexdigest()
+    with get_engine().begin() as connection:
+        connection.execute(
+            text("INSERT INTO documents(id, topic_id, title) VALUES (:id, :topic, 'arquivo.pdf')"),
+            {"id": document_id, "topic": topic},
+        )
+        connection.execute(
+            text("""INSERT INTO document_versions
+            (id, document_id, topic_id, filename, storage_key, sha256, status, page_count, processed_at)
+            VALUES (:id, :document, :topic, 'arquivo.pdf', :key, :sha, 'ready', 1, now())"""),
+            {"id": version_id, "document": document_id, "topic": topic, "key": f"{digest}.pdf", "sha": digest},
+        )
+        connection.execute(
+            text("INSERT INTO pages(id, version_id, physical_page, text) VALUES (:id, :version, 1, :text)"),
+            {"id": page_id, "version": version_id, "text": page_text},
+        )
+        # Simula o recorte da fundação, sem recriar o trecho nem atribuir uma seção na atualização.
+        connection.execute(
+            text("INSERT INTO passages(id, page_id, ordinal, excerpt) VALUES (:id, :page, 0, :excerpt)"),
+            {"id": passage_id, "page": page_id, "excerpt": page_text[:1500]},
+        )
+    return {"id": version_id, "page_id": page_id, "passage_id": passage_id, "content": content, "text": page_text}
+
+
+def assert_preserved_and_enriched(topic, versions):
+    with get_engine().connect() as connection:
+        rows = (
+            connection.execute(
+                text("""SELECT v.id, v.document_id, v.title, v.version, v.document_type,
+            v.declared_phase, v.linked_codes, v.status, v.processed_pages, p.id AS page_id, p.text,
+            s.id AS passage_id, s.excerpt, s.section, d.code FROM document_versions v
+            JOIN documents d ON d.id=v.document_id JOIN pages p ON p.version_id=v.id
+            JOIN passages s ON s.page_id=p.id WHERE v.topic_id=:topic"""),
+                {"topic": topic},
+            )
+            .mappings()
+            .all()
+        )
+        assert len(rows) == len(versions)
+        assert len({row["document_id"] for row in rows}) == 1
+        for legacy in versions:
+            row = next(row for row in rows if row["id"] == legacy["id"])
+            assert row["page_id"] == legacy["page_id"] and row["passage_id"] == legacy["passage_id"]
+            assert row["text"] == legacy["text"] and row["excerpt"] == legacy["text"][:1500]
+            assert row["section"] is None
+            assert row["code"] == "NG_111" and row["version"] in {"2.0.0", "3.0.0"}
+            assert row["title"] in {"Férias", "Novas férias"}
+            assert row["document_type"] == "Norma Geral" and row["declared_phase"] == "Vigente"
+            assert row["linked_codes"] == ["PX_1111-001"] and row["status"] == "ready"
+            assert row["processed_pages"] == 1
+        assert (
+            connection.execute(text("SELECT count(*) FROM documents WHERE topic_id=:topic"), {"topic": topic}).scalar()
+            == 1
+        )
+
+
+def test_migration_enriches_legacy_editions_and_preserves_curated_citations(topic):
+    config = get_migration_config()
+    fact_id = uuid4()
+    try:
+        command.downgrade(config, "0001")
+        versions = [seed_legacy(topic, "2.0.0"), seed_legacy(topic, "3.0.0", "Novas férias")]
+        with get_engine().begin() as connection:
+            connection.execute(
+                text("""INSERT INTO curated_facts(id, topic_id, category, statement, curated_by)
+                VALUES (:id, :topic, 'deadline', 'Prazo revisado', 'Gestão')"""),
+                {"id": fact_id, "topic": topic},
+            )
+            connection.execute(
+                text("INSERT INTO fact_citations(fact_id, passage_id) VALUES (:fact, :passage)"),
+                {"fact": fact_id, "passage": versions[0]["passage_id"]},
+            )
+        command.upgrade(config, "heads")
+        assert_preserved_and_enriched(topic, versions)
+        # A repetição não altera as fontes publicadas, mesmo sem originais no disco.
+        with get_engine().begin() as connection:
+            backfill_metadata(connection)
+            assert (
+                connection.execute(
+                    text("SELECT passage_id FROM fact_citations WHERE fact_id=:id"), {"id": fact_id}
+                ).scalar_one()
+                == versions[0]["passage_id"]
+            )
+        assert_preserved_and_enriched(topic, versions)
+        command.downgrade(config, "0002")
+        assert_preserved_and_enriched(topic, versions)
+        command.upgrade(config, "heads")
+    finally:
+        command.upgrade(config, "heads")
+        with get_engine().begin() as connection:
+            connection.execute(text("DELETE FROM curated_facts WHERE id=:id"), {"id": fact_id})
+
+
+def test_reimport_enriches_ready_legacy_version_without_replacing_citations(topic):
+    legacy = seed_legacy(topic, "3.0.0")
+    for _ in range(2):
+        with get_engine().begin() as connection:
+            result = enqueue(connection, topic, "reenvio.pdf", legacy["content"])
+        assert result.version_id == legacy["id"] and result.status == "ready" and result.duplicate
+        assert_preserved_and_enriched(topic, [legacy])
+
+
+def test_backfill_failure_rolls_back_metadata_and_keeps_citations(topic, monkeypatch):
+    from app import ingestion
+
+    versions = [seed_legacy(topic, "2.0.0"), seed_legacy(topic, "3.0.0")]
+    original_update = ingestion.update_metadata
+    called = []
+
+    def fail_second(connection, job, page):
+        original_update(connection, job, page)
+        called.append(job["id"])
+        if len(called) == 2:
+            raise RuntimeError("Falha durante atualização")
+
+    monkeypatch.setattr(ingestion, "update_metadata", fail_second)
+    with pytest.raises(RuntimeError):
+        with get_engine().begin() as connection:
+            backfill_metadata(connection)
+    with get_engine().connect() as connection:
+        assert (
+            connection.execute(
+                text("SELECT count(*) FROM document_versions WHERE topic_id=:topic AND title IS NULL"), {"topic": topic}
+            ).scalar()
+            == 2
+        )
+        passages = set(
+            connection.execute(
+                text("""SELECT s.id FROM passages s JOIN pages p ON p.id=s.page_id
+            JOIN document_versions v ON v.id=p.version_id WHERE v.topic_id=:topic"""),
+                {"topic": topic},
+            ).scalars()
+        )
+        assert passages == {version["passage_id"] for version in versions}

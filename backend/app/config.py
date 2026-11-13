@@ -1,13 +1,21 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
-from pydantic import Field, SecretStr
+from pydantic import BaseModel, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
 
+DemoGroup = Literal["clause-empregados", "clause-gestores", "clause-gestao-acervo"]
+
+
+class DemoAccount(BaseModel):
+    name: str = Field(min_length=1)
+    groups: list[DemoGroup] = Field(min_length=1)
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=None, extra="ignore")
+    model_config = SettingsConfigDict(env_file=None, env_ignore_empty=True, extra="ignore")
     postgres_db: str = "ipbot"
     postgres_user: str = "ipbot"
     postgres_password: SecretStr
@@ -15,7 +23,9 @@ class Settings(BaseSettings):
     postgres_port: int = 5432
     auth_secret: SecretStr = Field(min_length=32)
     auth_demo_enabled: bool = False
-    auth_demo_users: dict[str, dict[str, str]] = {}
+    auth_demo_sso_secret: SecretStr | None = Field(default=None, min_length=32)
+    auth_demo_users: dict[str, DemoAccount] = Field(default_factory=dict)
+    auth_cookie_secure: bool = True
     storage_path: Path = Path("/data/documents")
     collection_path: Path | None = None
     max_upload_bytes: int = 25 * 1024 * 1024
