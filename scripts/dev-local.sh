@@ -88,13 +88,19 @@ load_env() { # exporta .env do repositório e credenciais do banco local, sem im
   mkdir -p "$STORAGE_PATH"
 }
 
-alive() { [ -f "$RUN/$1.pid" ] && kill -0 "$(cat "$RUN/$1.pid")" 2>/dev/null; }
+# O PID gravado é o do líder da sessão criada por setsid; ele também identifica o grupo de processos
+# (por exemplo, npx e o node do Vite), que o stop encerra por inteiro.
+alive() { [ -s "$RUN/$1.pid" ] && kill -0 -- "-$(cat "$RUN/$1.pid")" 2>/dev/null; }
 
 launch() { # nome, pasta, comando...
   local name="$1" dir="$2"; shift 2
   if alive "$name"; then echo "$name já está em execução (PID $(cat "$RUN/$name.pid"))"; return; fi
   mkdir -p "$LOGS" "$RUN"
-  ( cd "$dir" && setsid nohup "$@" >>"$LOGS/$name.log" 2>&1 </dev/null & echo $! >"$RUN/$name.pid" )
+  rm -f "$RUN/$name.pid"
+  # shellcheck disable=SC2016  # $$ e $0 são expandidos pelo bash filho, não aqui
+  ( cd "$dir" && setsid bash -c 'echo $$ >"$0"; exec "$@"' "$RUN/$name.pid" "$@" >>"$LOGS/$name.log" 2>&1 </dev/null & )
+  for _ in $(seq 50); do [ -s "$RUN/$name.pid" ] && break; sleep 0.1; done
+  [ -s "$RUN/$name.pid" ] || die "$name não iniciou; veja $LOGS/$name.log"
   echo "$name iniciado (PID $(cat "$RUN/$name.pid")) · log $LOGS/$name.log"
 }
 
@@ -102,9 +108,10 @@ halt() {
   local name="$1" pid
   if alive "$name"; then
     pid="$(cat "$RUN/$name.pid")"
-    kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
-    for _ in $(seq 20); do kill -0 "$pid" 2>/dev/null || break; sleep 0.5; done
-    echo "$name parado"
+    kill -TERM -- "-$pid" 2>/dev/null || true
+    for _ in $(seq 20); do kill -0 -- "-$pid" 2>/dev/null || break; sleep 0.5; done
+    if kill -0 -- "-$pid" 2>/dev/null; then kill -KILL -- "-$pid" 2>/dev/null || true; echo "$name encerrado à força"
+    else echo "$name parado"; fi
   else
     echo "$name não estava em execução"
   fi
