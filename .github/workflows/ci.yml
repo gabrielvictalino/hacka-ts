@@ -2,7 +2,8 @@ name: CI
 
 on:
   pull_request:
-    branches: [dev, main]
+    # Além de dev e main, PRs empilhadas sobre uma branch de entrega (por exemplo, a #16 sobre a #12).
+    branches: [dev, main, 'feat/**', 'fix/**', 'docs/**', 'refactor/**', 'test/**', 'chore/**', 'style/**']
     types: [opened, reopened, synchronize, edited]
 
 permissions:
@@ -12,7 +13,7 @@ jobs:
   ci:
     name: CI IPBOT
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - name: Validar branches do pull request
         shell: pwsh
@@ -69,8 +70,37 @@ jobs:
           git diff --exit-code -- packages/contracts
           docker compose run --rm --no-deps frontend npm run build
 
+      - name: Testar regras do frontend e o script do ambiente sem Docker
+        run: |
+          docker compose run --rm --no-deps frontend npm test
+          bash scripts/tests/test-dev-local.sh
+
       - name: Verificar saúde dos serviços
         run: docker compose up -d --wait --wait-timeout 120
+
+      - name: Preparar roteiros de ponta a ponta e importar o acervo sintético
+        run: |
+          python3 -m venv "$RUNNER_TEMP/e2e-venv"
+          "$RUNNER_TEMP/e2e-venv/bin/pip" install --quiet -r tests/e2e/requirements.txt
+          (cd tests/e2e/ui && npm ci && npx playwright install --with-deps chromium)
+          "$RUNNER_TEMP/e2e-venv/bin/python" tests/e2e/acervo_sintetico.py "$RUNNER_TEMP/acervo"
+          COLLECTION_PATH="$RUNNER_TEMP/acervo" docker compose --profile tools run --rm importer
+
+      - name: Roteiro de API com o acervo sintético
+        env:
+          IPBOT_E2E_ACERVO: sintetico
+          IPBOT_BASE_URL: http://127.0.0.1:5173
+        run: |
+          "$RUNNER_TEMP/e2e-venv/bin/python" tests/e2e/api_roteiro.py
+
+      - name: Roteiro de interface com o acervo sintético
+        env:
+          IPBOT_E2E_ACERVO: sintetico
+          IPBOT_E2E_RUNNER: compose
+          IPBOT_BASE_URL: http://127.0.0.1:5173
+        run: |
+          "$RUNNER_TEMP/e2e-venv/bin/python" tests/e2e/ui/make_files.py tests/e2e/ui/arquivos
+          IPBOT_E2E_ALLOW_DB="$(sed -n 's/^POSTGRES_DB=//p' .env)" node tests/e2e/ui/roteiro_ui.cjs
 
       - name: Logs em caso de falha
         if: failure()
