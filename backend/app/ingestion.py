@@ -17,11 +17,12 @@ class InvalidDocument(ValueError):
     pass
 
 
-def update_metadata(connection, job, first_page: str) -> None:
+def update_metadata(connection, job, first_page: str, *, preserve_existing_citations: bool = False) -> None:
     """Enriquece a edição sem alterar páginas, trechos ou referências curadas."""
     metadata = read_header(first_page)
     metadata["title"] = metadata["title"] or job["filename"]
     document_id = job["document_id"]
+    conflict_error = None
     if metadata["code"]:
         # Upsert serializa edições do mesmo código, inclusive entre workers.
         document_id = connection.execute(
@@ -31,19 +32,35 @@ def update_metadata(connection, job, first_page: str) -> None:
             {"id": uuid4(), "topic_id": job["topic_id"], "title": metadata["title"], "code": metadata["code"]},
         ).scalar_one()
         conflict = connection.execute(
-            text("""SELECT id FROM document_versions WHERE document_id=:document AND version=:version
-                AND status='ready' AND id<>:id"""),
+            text("""SELECT id FROM document_versions v WHERE document_id=:document AND version=:version
+                AND (status='ready' OR EXISTS (SELECT 1 FROM pages WHERE version_id=v.id))
+                AND id<>:id ORDER BY created_at, id LIMIT 1"""),
             {"document": document_id, "version": metadata["version"], "id": job["id"]},
         ).scalar()
         if conflict:
-            raise InvalidDocument("Código e versão já publicados com outro conteúdo. Confira a edição do documento.")
+            if not preserve_existing_citations:
+                raise InvalidDocument(
+                    "Código e versão já publicados com outro conteúdo. Confira a edição do documento."
+                )
+            conflict_error = (
+                f"Conflito de metadados: {metadata['code']} v{metadata['version']} já consta na versão {conflict} "
+                "com outro conteúdo. Fonte legada e citações preservadas; confira a edição antes de reenviar."
+            )
     connection.execute(
         text("""UPDATE document_versions SET document_id=:document_id, title=:title, version=:version,
             document_type=:document_type, document_layer=:document_layer, declared_phase=:declared_phase,
             valid_from=:valid_from, valid_until=:valid_until, linked_codes=CAST(:linked_codes AS jsonb),
-            processed_pages=CASE WHEN status='ready' THEN page_count ELSE processed_pages END
+            processed_pages=CASE WHEN status='ready' THEN page_count ELSE processed_pages END,
+            status=CASE WHEN CAST(:conflict_error AS text) IS NOT NULL THEN 'failed' ELSE status END,
+            error=COALESCE(:conflict_error, error)
             WHERE id=:id"""),
-        {**metadata, "linked_codes": json.dumps(metadata["linked_codes"]), "id": job["id"], "document_id": document_id},
+        {
+            **metadata,
+            "linked_codes": json.dumps(metadata["linked_codes"]),
+            "id": job["id"],
+            "document_id": document_id,
+            "conflict_error": conflict_error,
+        },
     )
     if document_id != job["document_id"]:
         connection.execute(
@@ -59,13 +76,13 @@ def backfill_metadata(connection) -> None:
         connection.execute(
             text("""SELECT v.id, v.document_id, v.topic_id, v.filename, p.text FROM document_versions v
             JOIN pages p ON p.version_id=v.id AND p.physical_page=1
-            WHERE v.status='ready' AND v.title IS NULL ORDER BY v.topic_id, v.id FOR UPDATE OF v"""),
+            WHERE v.status='ready' AND v.title IS NULL ORDER BY v.topic_id, v.created_at, v.id FOR UPDATE OF v"""),
         )
         .mappings()
         .all()
     )
     for version in versions:
-        update_metadata(connection, version, version["text"])
+        update_metadata(connection, version, version["text"], preserve_existing_citations=True)
 
 
 def enqueue(connection, topic_id: UUID, filename: str, content: bytes) -> IngestionResult:
@@ -109,8 +126,27 @@ def enqueue(connection, topic_id: UUID, filename: str, content: bytes) -> Ingest
                 text("SELECT text FROM pages WHERE version_id=:id AND physical_page=1"),
                 previous,
             ).scalar_one()
-            update_metadata(connection, previous, first_page)
+            update_metadata(connection, previous, first_page, preserve_existing_citations=True)
+            previous = (
+                connection.execute(
+                    text("SELECT id, status, error FROM document_versions WHERE id=:id"),
+                    previous,
+                )
+                .mappings()
+                .one()
+            )
         if previous["status"] == "failed":
+            # Fontes legadas em conflito já têm citações publicadas. Nunca as recria no worker.
+            if connection.execute(
+                text("SELECT EXISTS (SELECT 1 FROM pages WHERE version_id=:id)"),
+                previous,
+            ).scalar_one():
+                return IngestionResult(
+                    version_id=previous["id"],
+                    status="failed",
+                    duplicate=True,
+                    error=previous["error"],
+                )
             connection.execute(
                 text(
                     "UPDATE document_versions SET status='queued', error=NULL, processed_pages=0, page_count=NULL WHERE id=:id"

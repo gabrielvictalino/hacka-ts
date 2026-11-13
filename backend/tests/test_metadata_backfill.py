@@ -18,8 +18,10 @@ DOCUMENTO SINTÉTICO.
 """
 
 
-def seed_legacy(topic, version, title="Férias"):
-    content = make_pdf([HEADER.format(version=version, phase="Vigente").replace("Título: Férias", f"Título: {title}")])
+def seed_legacy(topic, version, title="Férias", suffix=""):
+    content = make_pdf(
+        [HEADER.format(version=version, phase="Vigente").replace("Título: Férias", f"Título: {title}") + suffix]
+    )
     page_text = extract_pages(content)[0]
     document_id, version_id, page_id, passage_id = (uuid4() for _ in range(4))
     digest = hashlib.sha256(content).hexdigest()
@@ -131,8 +133,8 @@ def test_backfill_failure_rolls_back_metadata_and_keeps_citations(topic, monkeyp
     original_update = ingestion.update_metadata
     called = []
 
-    def fail_second(connection, job, page):
-        original_update(connection, job, page)
+    def fail_second(connection, job, page, **kwargs):
+        original_update(connection, job, page, **kwargs)
         called.append(job["id"])
         if len(called) == 2:
             raise RuntimeError("Falha durante atualização")
@@ -156,3 +158,106 @@ def test_backfill_failure_rolls_back_metadata_and_keeps_citations(topic, monkeyp
             ).scalars()
         )
         assert passages == {version["passage_id"] for version in versions}
+
+
+def test_migration_continues_on_legacy_duplicate_editions_and_preserves_all_citations(topic):
+    config = get_migration_config()
+    fact_id = uuid4()
+    try:
+        command.downgrade(config, "0001")
+        first = seed_legacy(topic, "3.0.0")
+        conflicting = seed_legacy(topic, "3.0.0", suffix="Outra orientação no mesmo código e versão.")
+        following = seed_legacy(topic, "2.0.0", "Novas férias")
+        versions = [first, conflicting, following]
+        assert first["content"] != conflicting["content"]
+        with get_engine().begin() as connection:
+            connection.execute(
+                text("""INSERT INTO curated_facts(id, topic_id, category, statement, curated_by)
+                VALUES (:id, :topic, 'deadline', 'Prazo revisado', 'Gestão')"""),
+                {"id": fact_id, "topic": topic},
+            )
+            for legacy in versions:
+                connection.execute(
+                    text("INSERT INTO fact_citations(fact_id, passage_id) VALUES (:fact, :passage)"),
+                    {"fact": fact_id, "passage": legacy["passage_id"]},
+                )
+        command.upgrade(config, "heads")
+        with get_engine().connect() as connection:
+            rows = (
+                connection.execute(
+                    text("""SELECT v.id, v.status, v.error, v.title, v.version, v.sha256,
+                v.storage_key, v.linked_codes, d.code, v.document_id, p.id AS page_id, p.text,
+                s.id AS passage_id, s.excerpt FROM document_versions v JOIN documents d ON d.id=v.document_id
+                JOIN pages p ON p.version_id=v.id JOIN passages s ON s.page_id=p.id
+                WHERE v.topic_id=:topic"""),
+                    {"topic": topic},
+                )
+                .mappings()
+                .all()
+            )
+            assert len(rows) == 3 and len({row["document_id"] for row in rows}) == 1
+            for legacy in versions:
+                row = next(row for row in rows if row["id"] == legacy["id"])
+                assert row["page_id"] == legacy["page_id"] and row["passage_id"] == legacy["passage_id"]
+                assert row["text"] == legacy["text"] and row["excerpt"] == legacy["text"][:1500]
+                assert row["sha256"] == hashlib.sha256(legacy["content"]).hexdigest()
+                assert row["storage_key"] == f"{row['sha256']}.pdf"
+                assert row["code"] == "NG_111" and row["linked_codes"] == ["PX_1111-001"]
+                if legacy is conflicting:
+                    assert row["status"] == "failed" and row["version"] == "3.0.0"
+                    assert "NG_111 v3.0.0" in row["error"] and str(first["id"]) in row["error"]
+                else:
+                    assert row["status"] == "ready" and row["error"] is None
+            assert set(
+                connection.execute(
+                    text("SELECT passage_id FROM fact_citations WHERE fact_id=:id"), {"id": fact_id}
+                ).scalars()
+            ) == {v["passage_id"] for v in versions}
+            snapshot = rows
+        # Repetir o backfill e o reenvio mantém o conflito e todas as fontes intactas.
+        with get_engine().begin() as connection:
+            backfill_metadata(connection)
+            result = enqueue(connection, topic, "reenvio.pdf", conflicting["content"])
+        assert result.version_id == conflicting["id"] and result.status == "failed" and result.duplicate
+        assert str(first["id"]) in result.error
+        with get_engine().connect() as connection:
+            for row in snapshot:
+                current = connection.execute(
+                    text("SELECT status, error FROM document_versions WHERE id=:id"), {"id": row["id"]}
+                ).one()
+                assert current == (row["status"], row["error"])
+            assert (
+                connection.execute(
+                    text("""SELECT count(*) FROM pages p JOIN document_versions v ON v.id=p.version_id
+                WHERE v.topic_id=:topic"""),
+                    {"topic": topic},
+                ).scalar()
+                == 3
+            )
+        from app.worker import process_one
+
+        assert process_one() is False
+    finally:
+        command.upgrade(config, "heads")
+        with get_engine().begin() as connection:
+            connection.execute(text("DELETE FROM curated_facts WHERE id=:id"), {"id": fact_id})
+
+
+def test_reimport_marks_legacy_conflict_without_recreating_sources(topic):
+    first = seed_legacy(topic, "3.0.0")
+    conflicting = seed_legacy(topic, "3.0.0", suffix="Conteúdo divergente.")
+    with get_engine().begin() as connection:
+        initial = enqueue(connection, topic, "primeiro.pdf", first["content"])
+    assert initial.status == "ready"
+    for _ in range(2):
+        with get_engine().begin() as connection:
+            result = enqueue(connection, topic, "reenvio.pdf", conflicting["content"])
+        assert result.version_id == conflicting["id"] and result.status == "failed" and result.duplicate
+        assert str(first["id"]) in result.error
+    with get_engine().connect() as connection:
+        row = connection.execute(
+            text("""SELECT p.id, s.id, s.excerpt FROM pages p JOIN passages s ON s.page_id=p.id
+            WHERE p.version_id=:id"""),
+            {"id": conflicting["id"]},
+        ).one()
+        assert row == (conflicting["page_id"], conflicting["passage_id"], conflicting["text"][:1500])

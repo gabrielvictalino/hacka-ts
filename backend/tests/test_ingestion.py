@@ -1,3 +1,4 @@
+import hashlib
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from uuid import uuid4
@@ -284,3 +285,62 @@ def test_ingestion_routes_use_current_sso_permissions(topic, client, subject, ex
     with get_engine().connect() as connection:
         name = connection.execute(text("SELECT name FROM topics WHERE id=:id"), {"id": topic}).scalar_one()
     assert client.post("/api/topics", json={"name": name}).status_code == (200 if expected == 202 else expected)
+
+
+def test_legacy_conflict_is_visible_and_retry_preserves_citations(topic, client):
+    from app.ingestion import backfill_metadata
+    from test_metadata_backfill import seed_legacy
+
+    first = seed_legacy(topic, "3.0.0")
+    conflicting = seed_legacy(topic, "3.0.0", suffix="Conteúdo divergente.")
+    original_path = get_settings().storage_path / f"{hashlib.sha256(conflicting['content']).hexdigest()}.pdf"
+    original_path.write_bytes(conflicting["content"])
+    with get_engine().begin() as connection:
+        backfill_metadata(connection)
+    rows = client.get("/api/documents", params={"topic_id": str(topic)}).json()
+    conflict = next(row for row in rows if row["id"] == str(conflicting["id"]))
+    assert conflict["status"] == "failed" and str(first["id"]) in conflict["error"]
+    assert conflict["code"] == "NG_111" and conflict["version"] == "3.0.0"
+    assert client.get(f"/api/documents/{conflicting['id']}/file").content == conflicting["content"]
+    # O reenvio conserva o original e as citações, sem permitir nova extração.
+    response = client.post(
+        "/api/documents", data={"topic_id": str(topic)}, files={"file": ("reenvio.pdf", conflicting["content"])}
+    )
+    assert response.status_code == 202 and response.json()["status"] == "failed"
+    assert client.get(f"/api/documents/{conflicting['id']}/file").content == conflicting["content"]
+    retry = client.post(f"/api/documents/{conflicting['id']}/retry")
+    assert retry.status_code == 202 and retry.json()["status"] == "failed" and retry.json()["duplicate"]
+    with get_engine().connect() as connection:
+        assert (
+            connection.execute(
+                text("""SELECT s.id FROM passages s JOIN pages p ON p.id=s.page_id
+            WHERE p.version_id=:id"""),
+                {"id": conflicting["id"]},
+            ).scalar_one()
+            == conflicting["passage_id"]
+        )
+
+
+def test_new_upload_cannot_replace_conflicting_legacy_source(topic):
+    from app.ingestion import backfill_metadata
+    from test_metadata_backfill import seed_legacy
+
+    first = seed_legacy(topic, "3.0.0")
+    conflicting = seed_legacy(topic, "3.0.0", suffix="Conteúdo divergente.")
+    with get_engine().begin() as connection:
+        backfill_metadata(connection)
+        # Mesmo se a outra fonte deixar de estar pronta, a fonte citada em conflito continua protegida.
+        connection.execute(text("UPDATE document_versions SET status='failed' WHERE id=:id"), {"id": first["id"]})
+    new, _ = queue(topic, [HEADER.format(version="3.0.0", phase="Vigente") + "Terceiro conteúdo."])
+    assert process_one()
+    with get_engine().connect() as connection:
+        row = connection.execute(
+            text("SELECT status, error FROM document_versions WHERE id=:id"), {"id": new.version_id}
+        ).one()
+        assert row.status == "failed" and "Código e versão já publicados" in row.error
+        assert (
+            connection.execute(
+                text("SELECT id FROM passages WHERE id=:id"), {"id": conflicting["passage_id"]}
+            ).scalar_one()
+            == conflicting["passage_id"]
+        )
