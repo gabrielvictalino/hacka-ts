@@ -6,6 +6,7 @@ import "./app.css";
 import { ManagementPanel } from "./ManagementPanel";
 import { QuestionPanel } from "./QuestionPanel";
 import { ValidityPanel } from "./ValidityPanel";
+import { DivergencePanel } from "./DivergencePanel";
 
 type Identity = components["schemas"]["Identity"];
 type DemoAssertion = components["schemas"]["DemoAssertion"];
@@ -18,8 +19,14 @@ function defaultView(identity: Identity) {
   return identity.role === "empregado" ? views[0] : views[1];
 }
 
+function can(identity: Identity | null, permission: Identity["permissions"][number]) {
+  return identity?.permissions.includes(permission) ?? false;
+}
+
+// A área de Gestão reúne upload (documents:ingest) e detalhes de divergências (alerts:read-details);
+// cada painel exige a própria permissão, e a aba aparece com qualquer uma delas.
 function canManage(identity: Identity | null) {
-  return identity?.permissions.includes("documents:ingest") ?? false;
+  return can(identity, "documents:ingest") || can(identity, "alerts:read-details");
 }
 
 function App() {
@@ -119,13 +126,15 @@ function App() {
         {view !== defaultView(identity) && <button onClick={() => setView(defaultView(identity))}>Voltar à minha visão</button>}
         <p className="muted">Muda só a apresentação. As permissões continuam as da sua conta.</p>
       </section>
-      {topics.length === 0 && <section><p>Nenhum tema importado. {management
+      {topics.length === 0 && <section><p>Nenhum tema importado. {can(identity, "documents:ingest")
         ? "Envie documentos pela Gestão ou importe o acervo." : "Peça à Gestão do acervo para importar os documentos."}</p></section>}
       {identity && <QuestionPanel key={identity.subject} topics={topics} view={view} />}
       {identity && <ValidityPanel key={`validity-${identity.subject}`} topics={topics} />}
     </div>}
     {identity && management && <div hidden={area !== "gestao"}>
-      <ManagementPanel key={`management-${identity.subject}`} topics={topics} onTopicsChanged={() => loadTopics()} />
+      {can(identity, "documents:ingest") &&
+        <ManagementPanel key={`management-${identity.subject}`} topics={topics} onTopicsChanged={() => loadTopics()} />}
+      {can(identity, "alerts:read-details") && <DivergencePanel key={`divergence-${identity.subject}`} topics={topics} />}
     </div>}
   </main>;
 }

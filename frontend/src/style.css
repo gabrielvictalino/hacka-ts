@@ -43,3 +43,15 @@ a { color: #17645b; }
 .calculation-fields legend { font-weight: 600; padding: 0 6px; }
 .holiday-row { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 12px; }
 .holiday-row label { flex: 1; min-width: 160px; margin-bottom: 0; }
+
+.divergence-card { margin-top: 20px; border-top: 1px solid #d9e4dd; padding-top: 16px; }
+.divergence-card h4 { margin: 0 0 8px; overflow-wrap: anywhere; }
+.divergence-card .facts { grid-template-columns: 1fr; }
+.divergence-card .facts ul { margin: 0; padding-left: 18px; }
+.passages { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 12px 0; }
+.passage { border: 1px solid #d9e4dd; border-radius: 8px; padding: 8px 12px; min-width: 0; }
+.passage p { margin: 0 0 4px; }
+.badge.divergence.confirmed, .notice.divergence.confirmed { border-color: #9b2929; }
+.badge.divergence.confirmed { background: #f8e3e3; color: #7a1f1f; }
+.badge.divergence.possible { background: #fbf0d9; color: #6b4a0e; }
+.badge.divergence.not_applicable { background: #eceeed; color: #45524f; }

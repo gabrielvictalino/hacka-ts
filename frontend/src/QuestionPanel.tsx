@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { components } from "../../packages/contracts";
 import { buildCalculation, CalculationFields, emptyCalculation } from "./CalculationFields";
+import { DivergenceNotices } from "./DivergencePanel";
 import { EvidencePanel } from "./Evidence";
 
 type Topic = components["schemas"]["Topic"];
@@ -79,6 +80,7 @@ export function QuestionPanel({ topics, view }: { topics: Topic[]; view: string 
       {/* Resposta primeiro: situação, aviso curto e afirmações com a fonte logo abaixo. */}
       <h3 ref={resultHeading} tabIndex={-1}>{statuses[result.status]}</h3>
       {result.notice && <p role="status" className="notice">{result.notice}</p>}
+      <DivergenceNotices notices={result.divergence_notices ?? []} />
       {/* Sem sustentação completa, a lacuna vem antes dos trechos para não ser lida como resposta. */}
       {unconfirmed && result.gaps.length > 0 && <Gaps gaps={result.gaps} />}
       {result.claims.length === 0 && <p>Nenhuma afirmação foi sustentada pelos trechos do tema.</p>}
