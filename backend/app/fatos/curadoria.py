@@ -70,9 +70,9 @@ def _resolve(connection, fact: CuratedFact):
         resolved, reason = _resolve_source(connection, topic_id, source)
         if resolved is None:
             return None, None, reason
-        # A chave primária é (fato, trecho): duas fontes no mesmo trecho mantêm o primeiro recorte.
-        if resolved[0] not in seen:
-            seen.add(resolved[0])
+        # Recortes distintos da mesma passagem são evidências próprias; só o recorte repetido é omitido.
+        if resolved not in seen:
+            seen.add(resolved)
             citations.append((resolved[0], source.item, resolved[1]))
     return topic_id, citations, None
 

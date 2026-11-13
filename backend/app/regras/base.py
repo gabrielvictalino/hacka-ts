@@ -27,11 +27,24 @@ def days(facts: dict[str, CuratedFact], key: str) -> int:
 
 
 def citations(facts: dict[str, CuratedFact], keys: list[str]) -> list[Citation]:
-    seen, result = set(), []
+    """Reúne as evidências dos parâmetros usados.
+
+    Fatos diferentes podem citar recortes distintos da mesma passagem (por exemplo, linhas de uma tabela).
+    Só é omitido o recorte idêntico ou contido em outro recorte já mantido da mesma passagem.
+    """
+    result: list[Citation] = []
     for key in keys:
         for citation in facts[key].citations:
-            if citation.passage_id not in seen:
-                seen.add(citation.passage_id)
+            same_passage = [kept for kept in result if kept.passage_id == citation.passage_id]
+            if any(citation.excerpt in kept.excerpt for kept in same_passage):
+                continue
+            # Um recorte mais amplo substitui os recortes que ele contém, preservando a ordem de entrada.
+            covered = [kept for kept in same_passage if kept.excerpt in citation.excerpt]
+            if covered:
+                index = result.index(covered[0])
+                result = [kept for kept in result if kept not in covered]
+                result.insert(index, citation)
+            else:
                 result.append(citation)
     return result
 

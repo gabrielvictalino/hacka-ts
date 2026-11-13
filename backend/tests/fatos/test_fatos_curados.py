@@ -242,3 +242,23 @@ def test_fact_routes_require_session_and_curation_requires_management(client, su
     response = client.post("/api/fatos/curadoria")
     assert response.status_code == 200
     assert response.json()["published"] + response.json()["pending"] == len(CATALOG)
+
+
+def test_fact_keeps_distinct_excerpts_of_the_same_passage(client, subject):
+    topic, name, suffix = subject
+    ingest(topic, suffix, "1.0.0", PAGES)
+    code = f"NG_9{suffix}"
+    entry = replace(
+        catalog(name, suffix)[1],
+        sources=(
+            Source(code, "1.0.0", 3, "Tabela 1", "Premiação 24.000,00"),
+            Source(code, "1.0.0", 3, "Tabela 1", "Total 96.000,00"),
+            Source(code, "1.0.0", 3, "Tabela 1", "Total 96.000,00"),
+        ),
+    )
+    with get_engine().begin() as connection:
+        assert publish_catalog(connection, (entry,)).published == 1
+    assert client.post("/api/auth/demo/session", json={"user_id": "reader"}).status_code == 200
+    (fact,) = client.get("/fatos", params={"assunto": str(topic)}).json()
+    assert [citation["excerpt"] for citation in fact["citations"]] == ["Premiação 24.000,00", "Total 96.000,00"]
+    assert len({citation["passage_id"] for citation in fact["citations"]}) == 1

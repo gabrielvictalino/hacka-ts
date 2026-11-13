@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from uuid import uuid4
+from uuid import NAMESPACE_URL, uuid4, uuid5
 
 import pytest
 from app.config import DemoAccount, get_settings
@@ -8,7 +8,7 @@ from app.contracts import Citation, CuratedFact, VacationScheduleRequest
 from app.fatos.catalogo import CATALOG
 from app.main import app
 from app.regras import ferias, inovacao
-from app.regras.base import BusinessCalendar, MissingFacts, money
+from app.regras.base import BusinessCalendar, MissingFacts, citations, money
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
@@ -35,8 +35,9 @@ def as_published(fact) -> CuratedFact:
         curated_at=datetime.now(timezone.utc),
         citations=[
             Citation(
-                version_id=uuid4(),
-                passage_id=uuid4(),
+                version_id=uuid5(NAMESPACE_URL, f"{source.code}/{source.version}"),
+                # Como no banco, fontes do mesmo item e página resolvem a mesma passagem.
+                passage_id=uuid5(NAMESPACE_URL, f"{source.code}/{source.version}/{source.page}/{source.item}"),
                 title=source.code,
                 code=source.code,
                 version=source.version,
@@ -213,3 +214,64 @@ def test_rule_routes_require_session_and_curated_facts(client, monkeypatch):
     assert response.status_code == 200
     assert response.json()["steps"][0]["result_text"] == "Diretor da DIRTEC"
     assert client.post("/api/regras/ferias/ausencia-simultanea", json={"team_size": 0}).status_code == 422
+
+
+def all_results():
+    return [
+        ferias.vacation_schedule(
+            FACTS,
+            VacationScheduleRequest(
+                start_date=date(2027, 5, 5),
+                request_registered_on=date(2027, 3, 1),
+                notice_received_on=date(2027, 3, 31),
+            ),
+        ),
+        ferias.simultaneous_absence(FACTS, 9),
+        ferias.vacation_days_by_absences(FACTS, 3),
+        ferias.reimbursement(FACTS, 100),
+        inovacao.approval_authority(FACTS, 1),
+        inovacao.budget_breakdown(FACTS),
+        inovacao.prize_payment_deadline(FACTS),
+    ]
+
+
+def test_every_parameter_keeps_its_evidence_in_the_demonstration():
+    for result in all_results():
+        for item in result.steps:
+            for key in item.fact_keys:
+                for source in FACTS[key].citations:
+                    assert any(
+                        kept.passage_id == source.passage_id and source.excerpt in kept.excerpt
+                        for kept in item.citations
+                    ), f"{result.rule} · {item.label}: falta {source.excerpt!r} de {key}"
+
+
+def test_budget_total_cites_each_summed_line_of_the_same_table():
+    total = by_label(inovacao.budget_breakdown(FACTS))["Orçamento total da edição 2027"]
+    excerpts = [citation.excerpt for citation in total.citations]
+    for line in (
+        "Premiação por colocação (8.000 + 5.000 + 3.000) 16.000,00",
+        "Premiação por arena (4 × 2.000) 8.000,00",
+        "Imersão 30.000,00",
+        "Kits de prototipagem 36.000,00",
+        "Comunicação 6.000,00",
+        "Total 96.000,00",
+    ):
+        assert line in excerpts
+    assert len({citation.passage_id for citation in total.citations if citation.section == "3"}) == 1
+
+
+def test_citations_drop_only_repeated_or_contained_excerpts():
+    base = FACTS["ferias.aviso.assinatura_recebimento"]
+    wide = base.citations[0]
+    narrow = wide.model_copy(update={"excerpt": "nunca depois de 30 dias antes do início de gozo."})
+    other = wide.model_copy(update={"excerpt": "Assinatura do aviso pelo empregado"})
+    sibling = wide.model_copy(update={"excerpt": "outro recorte da mesma passagem"})
+
+    def facts(*groups):
+        return {str(i): base.model_copy(update={"citations": list(group)}) for i, group in enumerate(groups)}
+
+    assert citations(facts([wide], [wide]), ["0", "1"]) == [wide]
+    assert citations(facts([wide], [narrow]), ["0", "1"]) == [wide]
+    assert citations(facts([narrow], [other], [wide]), ["0", "1", "2"]) == [wide]
+    assert citations(facts([wide], [sibling]), ["0", "1"]) == [wide, sibling]

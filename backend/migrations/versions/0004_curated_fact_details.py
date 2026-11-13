@@ -27,11 +27,25 @@ def upgrade():
         ALTER TABLE fact_citations ADD COLUMN item text;
         ALTER TABLE fact_citations ADD COLUMN quote text CHECK (quote IS NULL OR length(quote) > 0);
         ALTER TABLE fact_citations ADD COLUMN ordinal integer NOT NULL DEFAULT 0;
+        -- Um fato pode citar recortes distintos da mesma passagem; a ordem identifica cada citação.
+        UPDATE fact_citations c SET ordinal=n.ordinal - 1 FROM (
+            SELECT fact_id, passage_id, row_number() OVER (PARTITION BY fact_id ORDER BY passage_id) AS ordinal
+            FROM fact_citations) n
+        WHERE n.fact_id=c.fact_id AND n.passage_id=c.passage_id;
+        ALTER TABLE fact_citations DROP CONSTRAINT fact_citations_pkey;
+        ALTER TABLE fact_citations ADD CONSTRAINT fact_citations_pkey PRIMARY KEY (fact_id, ordinal);
+        CREATE INDEX ix_fact_citations_passage ON fact_citations(passage_id);
     """)
 
 
 def downgrade():
     op.execute("""
+        DROP INDEX ix_fact_citations_passage;
+        -- O esquema 0003 aceita uma citação por passagem: mantém o primeiro recorte de cada uma.
+        DELETE FROM fact_citations c USING fact_citations f
+            WHERE c.fact_id=f.fact_id AND c.passage_id=f.passage_id AND c.ordinal > f.ordinal;
+        ALTER TABLE fact_citations DROP CONSTRAINT fact_citations_pkey;
+        ALTER TABLE fact_citations ADD CONSTRAINT fact_citations_pkey PRIMARY KEY (fact_id, passage_id);
         ALTER TABLE fact_citations DROP COLUMN ordinal;
         ALTER TABLE fact_citations DROP COLUMN quote;
         ALTER TABLE fact_citations DROP COLUMN item;
