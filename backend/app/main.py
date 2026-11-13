@@ -26,6 +26,7 @@ from app.contracts import (
     TopicRequest,
 )
 from app.db import get_engine, get_migration_config
+from app.divergencias.api import router as divergences_router
 from app.fatos.api import router as facts_router
 from app.ingestion import InvalidDocument, enqueue
 from app.questions import answer, citation_by_id
@@ -39,6 +40,7 @@ app.include_router(auth_router)
 app.include_router(facts_router)
 app.include_router(rules_router)
 app.include_router(validity_router)
+app.include_router(divergences_router)
 
 
 @app.get("/health/live", tags=["health"])

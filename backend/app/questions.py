@@ -151,6 +151,14 @@ def answer(body: QuestionRequest) -> QuestionResponse:
                 confirmed += 1
             else:
                 gaps.append(f"Não consta confirmação completa para: {facet}.")
+        # Importação tardia: o painel de divergências reutiliza as citações deste módulo.
+        from app.divergencias.painel import divergence_notices
+
+        notices = (
+            divergence_notices(connection, body.topic_id, reference, list(citations.values()), body.question)
+            if citations
+            else []
+        )
     if not facets:
         gaps.append("Não consta evidência: informe os termos ou o ponto que deseja consultar.")
     passages = list(citations.values())
@@ -162,6 +170,7 @@ def answer(body: QuestionRequest) -> QuestionResponse:
         passages=passages,
         gaps=gaps,
         divergences=[],
+        divergence_notices=notices,
     )
     if not passages and not gaps:
         response.gaps.append("Não consta evidência nas versões elegíveis para a data e os filtros informados.")

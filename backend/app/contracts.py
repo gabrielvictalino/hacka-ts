@@ -146,6 +146,20 @@ class Divergence(Contract):
     citations: list[Citation] = Field(min_length=2)
 
 
+DivergenceStatus = Literal["confirmed", "possible", "not_applicable"]
+
+
+class DivergenceNotice(Contract):
+    """Aviso curto da Consulta; passagens, cenário e precedência ficam com a Gestão do acervo."""
+
+    key: str
+    kind: Literal["source_divergence"] = "source_divergence"
+    subject: str
+    status: Literal["confirmed", "possible"] = Field(description="possible: falta suporte para confirmar")
+    codes: list[str] = Field(description="Documentos envolvidos")
+    message: str
+
+
 class QuestionResponse(Contract):
     notice: str | None = None
     mode: Literal["extractive", "generated"]
@@ -155,6 +169,9 @@ class QuestionResponse(Contract):
     passages: list[Citation]
     gaps: list[str]
     divergences: list[Divergence]
+    divergence_notices: list[DivergenceNotice] = Field(
+        default_factory=list, description="Divergências curadas que envolvem as fontes recuperadas"
+    )
 
 
 class CuratedFact(Contract):
@@ -281,6 +298,53 @@ class TopicValidity(Contract):
     reference_date: date
     documents: list[DocumentValidity]
     changes: list[VersionChange]
+
+
+class DivergentGuidance(Contract):
+    role: str = Field(description="Camada da fonte no cenário, como norma geral ou procedimento vinculado")
+    guidance: str = Field(description="Resumo da curadoria; o texto literal está na citação")
+    status: ValidityStatus = Field(description="Situação da edição citada na data de referência")
+    applicable: bool
+    citation: Citation
+
+
+class DeclaredPrecedence(Contract):
+    prevailing_code: str
+    prevailing_document_id: UUID | None = Field(description="Nulo quando o documento não consta do tema")
+    statement: str
+    applicable: bool = Field(description="A edição que declara a precedência é aplicável na data de referência")
+    citation: Citation
+
+
+class SourceDivergence(Contract):
+    """Divergência entre fontes aplicáveis ao mesmo cenário; não é mudança histórica entre versões."""
+
+    key: str
+    kind: Literal["source_divergence"] = "source_divergence"
+    scenario_id: str
+    subject: str
+    question: str
+    scenario: str
+    conditions: list[str]
+    consequence: str
+    status: DivergenceStatus = Field(
+        description="confirmed: passagens localizadas e aplicáveis; possible: falta suporte para confirmar; "
+        "not_applicable: alguma edição não se aplica na data de referência"
+    )
+    status_explanation: str
+    missing_information: list[str]
+    guidances: list[DivergentGuidance]
+    precedence: DeclaredPrecedence | None = Field(description="Nula quando a declaração não foi localizada")
+    curation: Literal["manual"] = "manual"
+    curated_by: str
+    reviewed_on: date
+
+
+class TopicDivergences(Contract):
+    topic_id: UUID
+    reference_date: date
+    curation_note: str
+    divergences: list[SourceDivergence]
 
 
 class RuleStep(Contract):

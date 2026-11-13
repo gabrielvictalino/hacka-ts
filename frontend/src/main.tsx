@@ -4,6 +4,7 @@ import type { components } from "../../packages/contracts";
 import "./style.css";
 import { QuestionPanel } from "./QuestionPanel";
 import { ValidityPanel } from "./ValidityPanel";
+import { DivergencePanel } from "./DivergencePanel";
 
 type Identity = components["schemas"]["Identity"];
 type DemoAssertion = components["schemas"]["DemoAssertion"];
@@ -98,6 +99,7 @@ function App() {
     </section>}
     {identity && <QuestionPanel key={identity.subject} topics={topics} />}
     {identity && <ValidityPanel key={`validity-${identity.subject}`} topics={topics} />}
+    {identity?.permissions.includes("alerts:read-details") && <DivergencePanel key={`divergence-${identity.subject}`} topics={topics} />}
     {identity && <section aria-labelledby="topics-title"><h2 id="topics-title">Temas do acervo</h2>
       {topics.length ? <ul>{topics.map(topic => <li key={topic.id}>{topic.name}</li>)}</ul>
         : <p>Nenhum tema importado. Importe o acervo para começar.</p>}

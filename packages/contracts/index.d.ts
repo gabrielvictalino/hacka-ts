@@ -336,6 +336,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/divergencias": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Divergences
+         * @description Detalhes das divergências curadas manualmente: cenário, condições, passagens, precedência declarada e dados faltantes. Reservado à Gestão do acervo.
+         */
+        get: operations["divergences_api_divergencias_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/divergencias/avisos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Notices
+         * @description Aviso curto da Consulta para as divergências aplicáveis na data, sem os detalhes da Gestão.
+         */
+        get: operations["notices_api_divergencias_avisos_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health/live": {
         parameters: {
             query?: never;
@@ -710,6 +750,24 @@ export interface components {
             /** Items */
             items: components["schemas"]["CurationItem"][];
         };
+        /** DeclaredPrecedence */
+        DeclaredPrecedence: {
+            /** Prevailing Code */
+            prevailing_code: string;
+            /**
+             * Prevailing Document Id
+             * @description Nulo quando o documento não consta do tema
+             */
+            prevailing_document_id: string | null;
+            /** Statement */
+            statement: string;
+            /**
+             * Applicable
+             * @description A edição que declara a precedência é aplicável na data de referência
+             */
+            applicable: boolean;
+            citation: components["schemas"]["Citation"];
+        };
         /** DemoAssertion */
         DemoAssertion: {
             /** Token */
@@ -733,6 +791,57 @@ export interface components {
             missing_information: string[];
             /** Citations */
             citations: components["schemas"]["Citation"][];
+        };
+        /**
+         * DivergenceNotice
+         * @description Aviso curto da Consulta; passagens, cenário e precedência ficam com a Gestão do acervo.
+         */
+        DivergenceNotice: {
+            /** Key */
+            key: string;
+            /**
+             * Kind
+             * @default source_divergence
+             * @constant
+             */
+            kind: "source_divergence";
+            /** Subject */
+            subject: string;
+            /**
+             * Status
+             * @description possible: falta suporte para confirmar
+             * @enum {string}
+             */
+            status: "confirmed" | "possible";
+            /**
+             * Codes
+             * @description Documentos envolvidos
+             */
+            codes: string[];
+            /** Message */
+            message: string;
+        };
+        /** DivergentGuidance */
+        DivergentGuidance: {
+            /**
+             * Role
+             * @description Camada da fonte no cenário, como norma geral ou procedimento vinculado
+             */
+            role: string;
+            /**
+             * Guidance
+             * @description Resumo da curadoria; o texto literal está na citação
+             */
+            guidance: string;
+            /**
+             * Status
+             * @description Situação da edição citada na data de referência
+             * @enum {string}
+             */
+            status: "em_vigor" | "fase_declarada" | "a_iniciar" | "encerrada" | "substituida" | "sem_confirmacao";
+            /** Applicable */
+            applicable: boolean;
+            citation: components["schemas"]["Citation"];
         };
         /** DocumentLink */
         DocumentLink: {
@@ -925,6 +1034,11 @@ export interface components {
             gaps: string[];
             /** Divergences */
             divergences: components["schemas"]["Divergence"][];
+            /**
+             * Divergence Notices
+             * @description Divergências curadas que envolvem as fontes recuperadas
+             */
+            divergence_notices?: components["schemas"]["DivergenceNotice"][];
         };
         /**
          * Role
@@ -965,6 +1079,59 @@ export interface components {
             citations: components["schemas"]["Citation"][];
         };
         /**
+         * SourceDivergence
+         * @description Divergência entre fontes aplicáveis ao mesmo cenário; não é mudança histórica entre versões.
+         */
+        SourceDivergence: {
+            /** Key */
+            key: string;
+            /**
+             * Kind
+             * @default source_divergence
+             * @constant
+             */
+            kind: "source_divergence";
+            /** Scenario Id */
+            scenario_id: string;
+            /** Subject */
+            subject: string;
+            /** Question */
+            question: string;
+            /** Scenario */
+            scenario: string;
+            /** Conditions */
+            conditions: string[];
+            /** Consequence */
+            consequence: string;
+            /**
+             * Status
+             * @description confirmed: passagens localizadas e aplicáveis; possible: falta suporte para confirmar; not_applicable: alguma edição não se aplica na data de referência
+             * @enum {string}
+             */
+            status: "confirmed" | "possible" | "not_applicable";
+            /** Status Explanation */
+            status_explanation: string;
+            /** Missing Information */
+            missing_information: string[];
+            /** Guidances */
+            guidances: components["schemas"]["DivergentGuidance"][];
+            /** @description Nula quando a declaração não foi localizada */
+            precedence: components["schemas"]["DeclaredPrecedence"] | null;
+            /**
+             * Curation
+             * @default manual
+             * @constant
+             */
+            curation: "manual";
+            /** Curated By */
+            curated_by: string;
+            /**
+             * Reviewed On
+             * Format: date
+             */
+            reviewed_on: string;
+        };
+        /**
          * Succession
          * @description Sucessão declarada pela edição sucessora; a anterior continua consultável como fonte histórica.
          */
@@ -1001,6 +1168,23 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+        };
+        /** TopicDivergences */
+        TopicDivergences: {
+            /**
+             * Topic Id
+             * Format: uuid
+             */
+            topic_id: string;
+            /**
+             * Reference Date
+             * Format: date
+             */
+            reference_date: string;
+            /** Curation Note */
+            curation_note: string;
+            /** Divergences */
+            divergences: components["schemas"]["SourceDivergence"][];
         };
         /** TopicRequest */
         TopicRequest: {
@@ -1889,6 +2073,99 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TopicValidity"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    divergences_api_divergencias_get: {
+        parameters: {
+            query: {
+                /** @description ID do tema */
+                topic_id: string;
+                /** @description Padrão: hoje em America/Recife */
+                reference_date?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                ipbot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopicDivergences"];
+                };
+            };
+            /** @description Operação reservada à Gestão */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tema não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    notices_api_divergencias_avisos_get: {
+        parameters: {
+            query: {
+                /** @description ID do tema */
+                topic_id: string;
+                /** @description Padrão: hoje em America/Recife */
+                reference_date?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                ipbot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DivergenceNotice"][];
+                };
+            };
+            /** @description Tema não encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

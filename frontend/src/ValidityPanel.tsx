@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { components } from "../../packages/contracts";
+import { DivergenceNotices } from "./DivergencePanel";
 import { EvidencePanel, citationLabel } from "./Evidence";
 
 type Topic = components["schemas"]["Topic"];
@@ -9,6 +10,7 @@ type TopicValidity = components["schemas"]["TopicValidity"];
 type DocumentValidity = components["schemas"]["DocumentValidity"];
 type VersionValidity = components["schemas"]["VersionValidity"];
 type VersionChange = components["schemas"]["VersionChange"];
+type DivergenceNotice = components["schemas"]["DivergenceNotice"];
 
 const statusLabels: Record<VersionValidity["status"], string> = {
   em_vigor: "Em vigor na data",
@@ -108,6 +110,7 @@ export function ValidityPanel({ topics }: { topics: Topic[] }) {
   const [topic, setTopic] = useState("");
   const [date, setDate] = useState("");
   const [result, setResult] = useState<TopicValidity | null>(null);
+  const [notices, setNotices] = useState<DivergenceNotice[]>([]);
   const [evidence, setEvidence] = useState<Citation | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -122,9 +125,12 @@ export function ValidityPanel({ topics }: { topics: Topic[] }) {
     try {
       const params = new URLSearchParams({ topic_id: topicId });
       if (date) params.set("reference_date", date);
-      const response = await fetch(`/api/vigencia?${params}`);
+      const [response, warnings] = await Promise.all([
+        fetch(`/api/vigencia?${params}`), fetch(`/api/divergencias/avisos?${params}`)]);
       if (!response.ok) throw new Error("Não foi possível carregar a vigência do tema.");
       setResult(await response.json()); setEvidence(null);
+      // O aviso curto é complementar: a vigência continua disponível se ele falhar.
+      setNotices(warnings.ok ? await warnings.json() : []);
     } catch (e) { setError(e instanceof Error ? e.message : "Não foi possível carregar a vigência."); }
     finally { setBusy(false); }
   }
@@ -145,6 +151,7 @@ export function ValidityPanel({ topics }: { topics: Topic[] }) {
     {result && <div aria-live="polite">
       <h3 ref={heading} tabIndex={-1}>Situação em {br(result.reference_date)}</h3>
       {result.documents.length === 0 && <p>Nenhuma versão publicada neste tema.</p>}
+      <DivergenceNotices notices={notices} />
       {result.documents.map(d => <DocumentCard key={d.document_id} document={d} onOpen={setEvidence} />)}
       {result.changes.length > 0 && <>
         <h3>Mudanças entre versões</h3>

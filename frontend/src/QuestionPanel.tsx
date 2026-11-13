@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { components } from "../../packages/contracts";
+import { DivergenceNotices } from "./DivergencePanel";
 import { EvidencePanel } from "./Evidence";
 
 type Topic = components["schemas"]["Topic"];
@@ -68,6 +69,7 @@ export function QuestionPanel({ topics }: { topics: Topic[] }) {
       <p>{result.mode === "extractive" ? "Modo extrativo" : "Seleção de trechos por modelo"} · Referência: {result.reference_date}</p>
       <p>Os trechos são literais. A correspondência textual não confirma interpretações além do que a fonte declara.</p>
       {result.notice && <p role="status">{result.notice}</p>}
+      <DivergenceNotices notices={result.divergence_notices ?? []} />
       {result.claims.map((claim, index) => <article className="claim" key={index}>
         <blockquote>{claim.text}</blockquote>
         {claim.citations.map(c => <button key={c.passage_id} onClick={() => setEvidence(c)}>
