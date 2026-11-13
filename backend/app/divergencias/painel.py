@@ -123,21 +123,22 @@ def _affirms_precedence(context: str, literal: str, code: str) -> bool:
     """A frase curada só vale se declarar a precedência sem negação, como na tela de vigência."""
     quote = " ".join(literal.split())
     text_ = " ".join(context.split())
+    breaks = list(re.finditer(r"(?<=[.!?;])\s+(?=[^”\"'])", text_))
+    sentences = list(zip([0] + [b.end() for b in breaks], [b.start() for b in breaks] + [len(text_)]))
     position = text_.find(quote)
+    # Cada ocorrência é validada por inteiro: rejeição depois dela e negação na frase em que está.
     while position >= 0:
-        # A rejeição pode vir depois da frase citada, na mesma frase ou na seguinte ("… NG_111. Não procede.").
-        after = text_[position + len(quote) :]
-        if not REJECTED_PROPOSITION.search(re.sub(r"^[\s.;:!?”\"'»)]+", " ", after)):
-            break
+        end = position + len(quote)
+        # A rejeição pode vir na mesma frase ou na seguinte ("… NG_111. Não procede.").
+        rejected = REJECTED_PROPOSITION.search(re.sub(r"^[\s.;:!?”\"'»)]+", " ", text_[end:]))
+        if not rejected:
+            start, stop = next((s, e) for s, e in sentences if s <= position < e)
+            sentence = text_[start:stop]
+            for match in PRECEDENCE.finditer(sentence):
+                inside = position <= start + match.start() and start + match.end() <= end
+                if inside and match["code"].casefold() == code.casefold() and is_affirmative(sentence, match):
+                    return True
         position = text_.find(quote, position + 1)
-    if position < 0:
-        return False
-    for sentence in re.split(r"(?<=[.!?;])\s+(?=[^”\"'])", text_):
-        if quote not in sentence:
-            continue
-        for match in PRECEDENCE.finditer(sentence):
-            if match["code"].casefold() == code.casefold() and is_affirmative(sentence, match):
-                return True
     return False
 
 

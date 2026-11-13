@@ -438,3 +438,19 @@ def test_precedence_rejected_in_the_next_sentence_is_not_presented(client, topic
     (divergence,) = details(client, topic)["divergences"]
     assert divergence["precedence"] is None
     assert any("Precedência não confirmada" in item for item in divergence["missing_information"])
+
+
+def test_each_precedence_occurrence_must_pass_both_checks(client, topic):
+    mixed = (
+        "2.2. Em divergência, prevalece a NG_111. Não procede. Não se confirma que a afirmação seja "
+        "verdadeira: Em divergência, prevalece a NG_111."
+    )
+    acervo(topic, precedence=mixed)
+    (divergence,) = details(client, topic)["divergences"]
+    assert divergence["precedence"] is None
+    assert any("Precedência não confirmada" in item for item in divergence["missing_information"])
+
+
+def test_affirmative_occurrence_after_a_rejected_one_is_accepted():
+    text_ = "Em divergência, prevalece a NG_111. Não procede. Em divergência, prevalece a NG_111."
+    assert painel._affirms_precedence(text_, "Em divergência, prevalece a NG_111.", "NG_111")
