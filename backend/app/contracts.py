@@ -33,6 +33,7 @@ class Permission(StrEnum):
     read = "documents:read"
     ingest = "documents:ingest"
     curate = "facts:curate"
+    read_alerts = "alerts:read-details"
 
 
 class Identity(Contract):
@@ -45,6 +46,14 @@ class Identity(Contract):
 
 class DemoSessionRequest(Contract):
     user_id: str
+
+
+class AuthCallbackRequest(Contract):
+    token: str = Field(min_length=1, max_length=8192)
+
+
+class DemoAssertion(Contract):
+    token: str
 
 
 class Topic(Contract):

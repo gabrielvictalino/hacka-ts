@@ -3,19 +3,18 @@ from uuid import UUID
 
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Response, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.concurrency import run_in_threadpool
 
-from app.auth import current_identity, issue_demo_token, require_ingestion
+from app.auth import current_identity, require_management
+from app.auth import router as auth_router
 from app.config import get_settings
 from app.contracts import (
     APIError,
-    DemoSessionRequest,
     DocumentVersion,
-    Identity,
     IngestionResult,
     QuestionRequest,
     QuestionResponse,
@@ -25,6 +24,7 @@ from app.db import get_engine, get_migration_config
 from app.ingestion import InvalidDocument, enqueue
 
 app = FastAPI(title="IPBOT API", version="0.1.0")
+app.include_router(auth_router)
 
 
 @app.get("/health/live", tags=["health"])
@@ -43,38 +43,6 @@ def ready():
     if applied != expected:
         raise HTTPException(503, "Migração pendente.")
     return {"status": "ready", "migrations": sorted(applied)}
-
-
-@app.get("/api/auth/demo/users", response_model=list[Identity], tags=["identity"])
-def demo_users():
-    from app.auth import permissions_for
-    from app.contracts import Role
-
-    settings = get_settings()
-    if not settings.auth_demo_enabled:
-        raise HTTPException(404, "Simulador desativado.")
-    return [
-        Identity(
-            subject=key,
-            name=value["name"],
-            role=Role(value["role"]),
-            permissions=permissions_for(Role(value["role"])),
-            simulated=True,
-        )
-        for key, value in settings.auth_demo_users.items()
-    ]
-
-
-@app.post("/api/auth/demo/session", response_model=Identity, tags=["identity"])
-def demo_session(body: DemoSessionRequest, response: Response):
-    token = issue_demo_token(body.user_id)
-    response.set_cookie("ipbot_session", token, httponly=True, samesite="strict", max_age=3600)
-    return current_identity(token)
-
-
-@app.get("/api/auth/me", response_model=Identity, tags=["identity"])
-def me(identity: Identity = Depends(current_identity)):
-    return identity
 
 
 @app.get(
@@ -115,7 +83,7 @@ def documents(topic_id: UUID):
     "/api/documents",
     response_model=IngestionResult,
     status_code=202,
-    dependencies=[Depends(require_ingestion)],
+    dependencies=[Depends(require_management)],
     tags=["ingestion"],
     responses={422: {"model": APIError, "description": "PDF ou tema inválido, ou erro de validação dos campos"}},
 )
@@ -165,6 +133,7 @@ def original(version_id: UUID):
         media_type="application/pdf",
         filename=row["filename"],
         content_disposition_type="inline",
+        headers={"Cache-Control": "private, no-store"},
     )
 
 
@@ -177,3 +146,13 @@ def original(version_id: UUID):
 )
 def question(body: QuestionRequest):
     raise HTTPException(501, "Contrato disponível; mecanismo de consulta ainda não implementado.")
+
+
+@app.get(
+    "/conflitos",
+    dependencies=[Depends(require_management)],
+    tags=["management"],
+    responses={501: {"description": "Detalhes dos alertas serão implementados na issue #15"}},
+)
+def management_alerts():
+    raise HTTPException(501, "Detalhes dos alertas ainda indisponíveis.")
