@@ -1113,6 +1113,16 @@ export interface components {
              * @description O PDF da edição anterior consta do tema
              */
             previous_available: boolean;
+            /**
+             * In Effect
+             * @description A edição nova é aplicável na data de referência
+             */
+            in_effect: boolean;
+            /**
+             * To Valid From
+             * @description Início documentado da edição nova
+             */
+            to_valid_from: string | null;
             /** Note */
             note: string | null;
             /** Before Citations */

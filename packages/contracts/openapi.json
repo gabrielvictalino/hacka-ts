@@ -3586,6 +3586,24 @@
             "title": "Previous Available",
             "description": "O PDF da edição anterior consta do tema"
           },
+          "in_effect": {
+            "type": "boolean",
+            "title": "In Effect",
+            "description": "A edição nova é aplicável na data de referência"
+          },
+          "to_valid_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Valid From",
+            "description": "Início documentado da edição nova"
+          },
           "note": {
             "anyOf": [
               {
@@ -3627,6 +3645,8 @@
           "before_text",
           "after_text",
           "previous_available",
+          "in_effect",
+          "to_valid_from",
           "note",
           "before_citations",
           "after_citations"

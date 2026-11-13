@@ -247,3 +247,51 @@ def test_validity_requires_session_and_existing_topic(reader, topic):
     assert reader.get("/vigencia", params={"topic_id": str(topic)}).status_code == 200
     app.dependency_overrides.clear()
     assert reader.get("/api/vigencia", params={"topic_id": str(topic)}).status_code == 401
+
+
+def test_version_change_follows_reference_date(reader, topic, monkeypatch):
+    ingest(
+        topic,
+        [header("NG_906", "2.0.0", "Versão anterior", "10/12/2025 a 10/06/2027"), "2.3. Antecedência de 30 dias."],
+    )
+    new = ingest(
+        topic,
+        [
+            header(
+                "NG_906", "3.0.0", "Vigente", "03/08/2026 a 03/02/2028", "Esta norma substitui a NG_906 versão 2.0.0."
+            ),
+            "4.3.1. Antecedência de 45 dias.",
+        ],
+    )
+    change = CuratedChange(
+        key="teste.ng906",
+        code="NG_906",
+        attribute="antecedencia",
+        summary="Antecedência",
+        from_version="2.0.0",
+        to_version="3.0.0",
+        before_text="30 dias",
+        after_text="45 dias",
+        before=(Source("NG_906", "2.0.0", 2, "2.3", "Antecedência de 30 dias."),),
+        after=(Source("NG_906", "3.0.0", 2, "4.3.1", "Antecedência de 45 dias."),),
+    )
+    monkeypatch.setattr(painel, "CHANGES", (change,))
+    [before] = validity(reader, topic, "2026-07-10")["changes"]
+    # Antes do início da sucessora, a mudança não pode ser apresentada como concluída.
+    assert not before["in_effect"] and before["to_valid_from"] == "2026-08-03" and before["to_version_id"] == new
+    [after] = validity(reader, topic, "2026-11-13")["changes"]
+    assert after["in_effect"]
+
+
+def test_upcoming_notice_uses_nearest_future_start(reader, topic):
+    ingest(
+        topic, [header("CTR_2099-002", "1.0.0", "Vigente", "01/12/2026 a 31/01/2027"), "CLÁUSULA PRIMEIRA - Objeto."]
+    )
+    ingest(
+        topic, [header("CTR_2099-002", "2.0.0", "Vigente", "01/02/2027 a 30/06/2027"), "CLÁUSULA PRIMEIRA - Objeto."]
+    )
+    doc = document(validity(reader, topic, "2026-11-13"), "CTR_2099-002")
+    # A lista vem do início mais recente ao mais antigo; o aviso usa o início mais próximo.
+    assert [v["valid_from"] for v in doc["versions"]] == ["2027-02-01", "2026-12-01"]
+    assert all(v["status"] == "a_iniciar" for v in doc["versions"])
+    assert "Vigência a iniciar em 01/12/2026 (versão 1.0.0)" in doc["notice"]

@@ -177,7 +177,7 @@ def _precedence(connection, topic_id, states, documents_by_code) -> dict:
     return grouped
 
 
-def _changes(connection, topic_id, ready) -> list[VersionChange]:
+def _changes(connection, topic_id, ready, states) -> list[VersionChange]:
     by_edition = {((v["code"] or "").casefold(), v["version"]): v["id"] for v in ready.values()}
     changes = []
     for change in CHANGES:
@@ -202,6 +202,9 @@ def _changes(connection, topic_id, ready) -> list[VersionChange]:
                 before_text=change.before_text,
                 after_text=change.after_text,
                 previous_available=from_id is not None,
+                # A mudança só vale na data em que a edição nova é aplicável.
+                in_effect=states[to_id].applicable,
+                to_valid_from=ready[to_id]["valid_from"],
                 note=change.note,
                 before_citations=before,
                 after_citations=after,
@@ -315,5 +318,5 @@ def topic_validity(connection, topic_id, reference: date) -> TopicValidity:
         topic_id=topic_id,
         reference_date=reference,
         documents=documents,
-        changes=_changes(connection, topic_id, ready),
+        changes=_changes(connection, topic_id, ready, states),
     )

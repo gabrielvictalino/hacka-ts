@@ -37,7 +37,9 @@ function CurrentBadge({ document }: { document: DocumentValidity }) {
       {v.status === "fase_declarada" ? " · datas não informadas" : ""}</span>;
   }
   if (current.length > 1) return <span className="badge sem_confirmacao">Mais de uma edição aplicável</span>;
-  const upcoming = document.versions.find(v => v.status === "a_iniciar");
+  // As versões vêm do início mais recente ao mais antigo; o selo anuncia o início futuro mais próximo.
+  const upcoming = document.versions.filter(v => v.status === "a_iniciar" && v.valid_from)
+    .sort((a, b) => a.valid_from!.localeCompare(b.valid_from!))[0];
   if (upcoming) return <span className="badge a_iniciar">A iniciar em {br(upcoming.valid_from)} · versão {upcoming.version}</span>;
   return <span className="badge encerrada">Sem edição aplicável</span>;
 }
@@ -82,11 +84,14 @@ function DocumentCard({ document, onOpen }: { document: DocumentValidity; onOpen
   </article>;
 }
 
-function ChangeCard({ change, onOpen }: { change: VersionChange; onOpen: (c: Citation) => void }) {
+function ChangeCard({ change, reference, onOpen }: { change: VersionChange; reference: string; onOpen: (c: Citation) => void }) {
+  const situation = change.in_effect
+    ? `a versão ${change.to_version} é a aplicável em ${br(reference)}.`
+    : `a versão ${change.to_version} ainda não se aplica em ${br(reference)}${change.to_valid_from ? `; começa em ${br(change.to_valid_from)}` : ""}.`;
   return <article className="change">
     <h4>{change.code}: {change.summary}</h4>
     <p className="change-values"><span>v{change.from_version}: {change.before_text}</span> → <span>v{change.to_version}: {change.after_text}</span></p>
-    <p className="muted">Mudança entre versões do mesmo documento. Não é divergência entre fontes aplicáveis: a versão {change.from_version} foi substituída.</p>
+    <p className="muted">Mudança entre versões do mesmo documento, não divergência entre fontes aplicáveis: {situation}</p>
     {change.note && <p className="notice">{change.note}</p>}
     <div className="citations">
       {change.before_citations.map(c => <CitationButton key={c.passage_id + c.excerpt} citation={c} onOpen={onOpen} prefix="Antes:" />)}
@@ -139,7 +144,7 @@ export function ValidityPanel({ topics }: { topics: Topic[] }) {
       {result.documents.map(d => <DocumentCard key={d.document_id} document={d} onOpen={setEvidence} />)}
       {result.changes.length > 0 && <>
         <h3>Mudanças entre versões</h3>
-        {result.changes.map(c => <ChangeCard key={c.key} change={c} onOpen={setEvidence} />)}
+        {result.changes.map(c => <ChangeCard key={c.key} change={c} reference={result.reference_date} onOpen={setEvidence} />)}
       </>}
       {evidence && <EvidencePanel ref={evidencePanel} evidence={evidence} closeLabel="Voltar à vigência"
         onClose={() => { setEvidence(null); heading.current?.focus(); }} />}
