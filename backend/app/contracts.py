@@ -2,7 +2,7 @@
 
 from datetime import date, datetime
 from enum import StrEnum
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -126,15 +126,8 @@ class QuestionFilters(Contract):
     area: str | None = Field(default=None, min_length=1, max_length=200)
 
 
-class QuestionRequest(Contract):
-    topic_id: UUID
-    question: str = Field(min_length=1, max_length=4000, pattern=r"\S")
-    reference_date: date | None = None
-    perspective: Perspective | None = None
-    filters: QuestionFilters = Field(default_factory=QuestionFilters)
-
-
 class Claim(Contract):
+    calculation_step: int | None = Field(default=None, ge=0, description="Índice do passo calculado pelo backend")
     text: str
     citations: list[Citation] = Field(min_length=1)
 
@@ -144,17 +137,6 @@ class Divergence(Contract):
     reasoning: str
     missing_information: list[str]
     citations: list[Citation] = Field(min_length=2)
-
-
-class QuestionResponse(Contract):
-    notice: str | None = None
-    mode: Literal["extractive", "generated"]
-    status: Literal["supported", "partial", "insufficient", "divergent"]
-    reference_date: date
-    claims: list[Claim]
-    passages: list[Citation]
-    gaps: list[str]
-    divergences: list[Divergence]
 
 
 class CuratedFact(Contract):
@@ -234,3 +216,64 @@ class UnjustifiedAbsencesRequest(Contract):
 
 class AmountRequest(Contract):
     amount: float = Field(gt=0, le=1_000_000_000)
+
+
+class VacationCalculation(VacationScheduleRequest):
+    rule: Literal["ferias.prazos"]
+
+
+class TeamCalculation(TeamAbsenceRequest):
+    rule: Literal["ferias.ausencia_simultanea"]
+
+
+class AbsencesCalculation(UnjustifiedAbsencesRequest):
+    rule: Literal["ferias.dias_por_faltas"]
+
+
+class ReimbursementCalculation(AmountRequest):
+    rule: Literal["ferias.ressarcimento"]
+
+
+class ApprovalCalculation(AmountRequest):
+    rule: Literal["inovacao.alcada"]
+
+
+class BudgetCalculation(Contract):
+    rule: Literal["inovacao.orcamento"]
+
+
+class PrizeCalculation(Contract):
+    rule: Literal["inovacao.pagamento_premiacao"]
+
+
+CalculationRequest = Annotated[
+    VacationCalculation
+    | TeamCalculation
+    | AbsencesCalculation
+    | ReimbursementCalculation
+    | ApprovalCalculation
+    | BudgetCalculation
+    | PrizeCalculation,
+    Field(discriminator="rule"),
+]
+
+
+class QuestionRequest(Contract):
+    topic_id: UUID
+    question: str = Field(min_length=1, max_length=4000, pattern=r"\S")
+    reference_date: date | None = None
+    perspective: Perspective | None = None
+    filters: QuestionFilters = Field(default_factory=QuestionFilters)
+    calculation: CalculationRequest | None = None
+
+
+class QuestionResponse(Contract):
+    calculation: RuleResult | None = None
+    notice: str | None = None
+    mode: Literal["extractive", "generated"]
+    status: Literal["supported", "partial", "insufficient", "divergent"]
+    reference_date: date
+    claims: list[Claim]
+    passages: list[Citation]
+    gaps: list[str]
+    divergences: list[Divergence]

@@ -1764,6 +1764,28 @@
         ],
         "title": "APIError"
       },
+      "AbsencesCalculation": {
+        "properties": {
+          "absences": {
+            "type": "integer",
+            "maximum": 366.0,
+            "minimum": 0.0,
+            "title": "Absences"
+          },
+          "rule": {
+            "type": "string",
+            "const": "ferias.dias_por_faltas",
+            "title": "Rule"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "absences",
+          "rule"
+        ],
+        "title": "AbsencesCalculation"
+      },
       "AmountRequest": {
         "properties": {
           "amount": {
@@ -1779,6 +1801,28 @@
           "amount"
         ],
         "title": "AmountRequest"
+      },
+      "ApprovalCalculation": {
+        "properties": {
+          "amount": {
+            "type": "number",
+            "maximum": 1000000000.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Amount"
+          },
+          "rule": {
+            "type": "string",
+            "const": "inovacao.alcada",
+            "title": "Rule"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "amount",
+          "rule"
+        ],
+        "title": "ApprovalCalculation"
       },
       "AuthCallbackRequest": {
         "properties": {
@@ -1873,6 +1917,21 @@
           "files"
         ],
         "title": "Body_upload_batch_api_documents_batch_post"
+      },
+      "BudgetCalculation": {
+        "properties": {
+          "rule": {
+            "type": "string",
+            "const": "inovacao.orcamento",
+            "title": "Rule"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "rule"
+        ],
+        "title": "BudgetCalculation"
       },
       "Citation": {
         "properties": {
@@ -2011,6 +2070,19 @@
       },
       "Claim": {
         "properties": {
+          "calculation_step": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculation Step",
+            "description": "Índice do passo calculado pelo backend"
+          },
           "text": {
             "type": "string",
             "title": "Text"
@@ -2632,6 +2704,21 @@
         ],
         "title": "Perspective"
       },
+      "PrizeCalculation": {
+        "properties": {
+          "rule": {
+            "type": "string",
+            "const": "inovacao.pagamento_premiacao",
+            "title": "Rule"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "rule"
+        ],
+        "title": "PrizeCalculation"
+      },
       "QuestionFilters": {
         "properties": {
           "area": {
@@ -2690,6 +2777,51 @@
           },
           "filters": {
             "$ref": "#/components/schemas/QuestionFilters"
+          },
+          "calculation": {
+            "anyOf": [
+              {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/VacationCalculation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/TeamCalculation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AbsencesCalculation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ReimbursementCalculation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ApprovalCalculation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/BudgetCalculation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PrizeCalculation"
+                  }
+                ],
+                "discriminator": {
+                  "propertyName": "rule",
+                  "mapping": {
+                    "ferias.ausencia_simultanea": "#/components/schemas/TeamCalculation",
+                    "ferias.dias_por_faltas": "#/components/schemas/AbsencesCalculation",
+                    "ferias.prazos": "#/components/schemas/VacationCalculation",
+                    "ferias.ressarcimento": "#/components/schemas/ReimbursementCalculation",
+                    "inovacao.alcada": "#/components/schemas/ApprovalCalculation",
+                    "inovacao.orcamento": "#/components/schemas/BudgetCalculation",
+                    "inovacao.pagamento_premiacao": "#/components/schemas/PrizeCalculation"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculation"
           }
         },
         "additionalProperties": false,
@@ -2702,6 +2834,16 @@
       },
       "QuestionResponse": {
         "properties": {
+          "calculation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RuleResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "notice": {
             "anyOf": [
               {
@@ -2777,6 +2919,28 @@
           "divergences"
         ],
         "title": "QuestionResponse"
+      },
+      "ReimbursementCalculation": {
+        "properties": {
+          "amount": {
+            "type": "number",
+            "maximum": 1000000000.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Amount"
+          },
+          "rule": {
+            "type": "string",
+            "const": "ferias.ressarcimento",
+            "title": "Rule"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "amount",
+          "rule"
+        ],
+        "title": "ReimbursementCalculation"
       },
       "Role": {
         "type": "string",
@@ -2911,6 +3075,28 @@
         ],
         "title": "TeamAbsenceRequest"
       },
+      "TeamCalculation": {
+        "properties": {
+          "team_size": {
+            "type": "integer",
+            "maximum": 100000.0,
+            "minimum": 1.0,
+            "title": "Team Size"
+          },
+          "rule": {
+            "type": "string",
+            "const": "ferias.ausencia_simultanea",
+            "title": "Rule"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "team_size",
+          "rule"
+        ],
+        "title": "TeamCalculation"
+      },
       "Topic": {
         "properties": {
           "id": {
@@ -2963,6 +3149,64 @@
           "absences"
         ],
         "title": "UnjustifiedAbsencesRequest"
+      },
+      "VacationCalculation": {
+        "properties": {
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Start Date",
+            "description": "Início de gozo (D)"
+          },
+          "holidays": {
+            "items": {
+              "type": "string",
+              "format": "date"
+            },
+            "type": "array",
+            "maxItems": 366,
+            "title": "Holidays",
+            "description": "Feriados da sede; o acervo não traz o calendário"
+          },
+          "request_registered_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Registered On",
+            "description": "Data de registro da solicitação"
+          },
+          "notice_received_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notice Received On",
+            "description": "Data de recebimento do aviso"
+          },
+          "rule": {
+            "type": "string",
+            "const": "ferias.prazos",
+            "title": "Rule"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "start_date",
+          "rule"
+        ],
+        "title": "VacationCalculation"
       },
       "VacationScheduleRequest": {
         "properties": {

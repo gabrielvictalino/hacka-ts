@@ -763,3 +763,26 @@ def test_aws_and_validation_failures_keep_full_response_without_logging_content(
     assert "DADO_REMOTO_PRIVADO" not in caplog.text
     assert literal not in caplog.text
     assert "Valor marciano" not in caplog.text
+
+
+@pytest.mark.parametrize(
+    "question,explicit",
+    [
+        ("Prazo locação", None),
+        ("Prazo locação em 13/11/2026", None),
+        ("Prazo locação", "2026-11-12"),
+    ],
+)
+def test_generation_receives_same_effective_date_as_retrieval(reader, topic, monkeypatch, question, explicit):
+    ingest(topic, ["Locação: prazo de 30 dias."])
+    monkeypatch.setattr(get_settings(), "bedrock_model_id", "test-model")
+    received = []
+
+    def generate(body, sources):
+        received.append(body.reference_date)
+        return [Claim(text=c.excerpt, citations=[c]) for c in sources]
+
+    monkeypatch.setattr(questions, "generate_claims", generate)
+    result = ask(reader, topic, question, reference_date=explicit)
+    assert result["mode"] == "generated"
+    assert received[0].isoformat() == result["reference_date"]

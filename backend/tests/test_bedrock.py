@@ -295,3 +295,108 @@ def test_real_boto3_client_is_closed_on_success_and_error(monkeypatch, evidence,
             assert bedrock.generate_claims(body, [evidence])[0].citations == [evidence]
         stubber.assert_no_pending_responses()
     close.assert_called_once_with()
+
+
+@pytest.mark.parametrize("invalid", ["secret", "number", "json", "nested"])
+def test_preflight_configuration_errors_are_json_without_inputs(monkeypatch, capsys, invalid):
+    from app.config import Settings
+
+    marker = "CONFIGURACAO_PRIVADA"
+    monkeypatch.setenv("POSTGRES_PASSWORD", marker)
+    monkeypatch.setenv("AUTH_SECRET", "s" * 32)
+    if invalid == "secret":
+        monkeypatch.setenv("AUTH_SECRET", marker)  # menos de 32 caracteres
+    elif invalid == "number":
+        monkeypatch.setenv("BEDROCK_TIMEOUT_SECONDS", marker)
+    elif invalid == "json":
+        monkeypatch.setenv("AUTH_DEMO_USERS", marker)
+    else:
+        monkeypatch.setenv("AUTH_DEMO_USERS", json.dumps({marker: {"name": marker, "groups": [marker]}}))
+    monkeypatch.setattr(check_bedrock, "get_settings", Settings)
+    monkeypatch.setattr(bedrock.boto3, "client", lambda *a, **k: pytest.fail("AWS não deve ser chamada"))
+    assert check_bedrock.main() == 2
+    output = capsys.readouterr()
+    payload = json.loads(output.out)
+    assert payload["error"] == "configuration_error" and not payload["available"]
+    assert marker not in output.out and not output.err
+    if "fields" in payload:
+        assert all(set(field) == {"field", "type"} for field in payload["fields"])
+
+
+@pytest.fixture
+def calculated(evidence):
+    from app.contracts import RuleResult, RuleStep
+
+    return RuleResult(
+        rule="teste.valor",
+        steps=[
+            RuleStep(
+                label="Resultado",
+                rule="Aplicar percentual",
+                result_text="R$ 912,50",
+                result_value=912.50,
+                computation=["R$ 18.250,00 × 5% = R$ 912,50"],
+                fact_keys=["teste.valor"],
+                citations=[evidence],
+            )
+        ],
+        warnings=["Aviso preservado."],
+        assumptions=["Premissa preservada."],
+    )
+
+
+def test_calculated_values_and_sources_are_sent_to_model(monkeypatch, evidence, calculated):
+    explanation = bedrock.calculation_claims(calculated)[0]
+    configure_response = {
+        "stopReason": "end_turn",
+        "output": {
+            "message": {
+                "role": "assistant",
+                "content": [{"text": json.dumps({"claims": [{"calculation_step": 0, "text": explanation.text}]})}],
+            }
+        },
+    }
+    _, calls = configure(monkeypatch, evidence, response=configure_response)
+    claims = bedrock.generate_claims(
+        QuestionRequest(topic_id=uuid4(), question="Explique o resultado.", reference_date="2026-11-13"),
+        [evidence],
+        calculated,
+    )
+    assert claims == [explanation]
+    assert "912,50" not in evidence.excerpt and "912,50" in claims[0].text
+    sent = json.loads(calls[0]["messages"][0]["content"][0]["text"])["calculation"]
+    assert sent["steps"] == calculated.model_dump(mode="json")["steps"]
+    assert sent["warnings"] == calculated.warnings
+    assert sent["assumptions"] == calculated.assumptions
+    assert sent["explanations"][0]["text"] == explanation.text
+
+
+@pytest.mark.parametrize("change", ["value", "source", "duplicate", "index", "bool", "omitted"])
+def test_calculated_explanations_cannot_change_results_sources_or_omit_steps(evidence, calculated, change):
+    explanation = bedrock.calculation_claims(calculated)[0]
+    claim = {"calculation_step": 0, "text": explanation.text}
+    payload = {"claims": [claim]}
+    if change == "value":
+        claim["text"] = explanation.text.replace("912,50", "999,00")
+    elif change == "source":
+        claim["citations"] = [evidence.model_dump(mode="json")]
+    elif change == "duplicate":
+        payload["claims"].append(claim)
+    elif change == "index":
+        claim["calculation_step"] = 1
+    elif change == "bool":
+        claim["calculation_step"] = False
+    elif change == "omitted":
+        payload["claims"] = [{"passage_id": str(evidence.passage_id), "text": evidence.excerpt}]
+    with pytest.raises(ValueError):
+        bedrock.validate_claims(json.dumps(payload), [evidence], calculated)
+
+
+def test_calculation_organizes_every_step_without_dropping_sources(evidence, calculated):
+    calculated.steps.append(calculated.steps[0].model_copy(update={"label": "Segundo resultado"}))
+    explanations = bedrock.calculation_claims(calculated)
+    payload = {"claims": [{"calculation_step": c.calculation_step, "text": c.text} for c in reversed(explanations)]}
+    assert bedrock.validate_claims(json.dumps(payload), [evidence], calculated) == list(reversed(explanations))
+    payload["claims"].pop()
+    with pytest.raises(ValueError, match="omitiu"):
+        bedrock.validate_claims(json.dumps(payload), [evidence], calculated)

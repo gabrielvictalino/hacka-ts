@@ -65,11 +65,14 @@ export function QuestionPanel({ topics }: { topics: Topic[] }) {
       <h3 ref={resultHeading} tabIndex={-1}>{statuses[result.status]}</h3>
       <p>{context}</p>
       <p>{result.mode === "extractive" ? "Modo extrativo" : "Seleção de trechos por modelo"} · Referência: {result.reference_date}</p>
-      <p>Os trechos são literais. A correspondência textual não confirma interpretações além do que a fonte declara.</p>
+      <p>{result.calculation
+        ? "Os resultados foram calculados a partir das regras publicadas. Confira a memória de cálculo, as premissas e as fontes."
+        : "Os trechos são literais. A correspondência textual não confirma interpretações além do que a fonte declara."}</p>
       {result.notice && <p role="status">{result.notice}</p>}
       {result.claims.map((claim, index) => <article className="claim" key={index}>
+        {claim.calculation_step != null && <p>Resultado calculado · passo {claim.calculation_step + 1}</p>}
         <blockquote>{claim.text}</blockquote>
-        {claim.citations.map(c => <button key={c.passage_id} onClick={() => setEvidence(c)}>
+        {claim.citations.map(c => <button key={`${c.passage_id}:${c.section}:${c.excerpt}`} onClick={() => setEvidence(c)}>
           Conferir {c.code || c.title} · {c.version || "versão não identificada"} · p. {c.physical_page}{c.section ? ` · ${c.section}` : ""}
         </button>)}
       </article>)}
@@ -78,6 +81,11 @@ export function QuestionPanel({ topics }: { topics: Topic[] }) {
           {c.code || c.title} · {c.version || "versão não identificada"} · p. {c.physical_page}
         </button></li>)}</ul>
       </details>}
+      {result.calculation && <>
+        {(result.calculation.warnings ?? []).map(warning => <p role="status" key={warning}>{warning}</p>)}
+        {(result.calculation.assumptions?.length ?? 0) > 0 && <><h3>Premissas do cálculo</h3>
+          <ul>{result.calculation.assumptions?.map(assumption => <li key={assumption}>{assumption}</li>)}</ul></>}
+      </>}
       {result.gaps.length > 0 && <><h3>Pontos sem confirmação</h3><ul>{result.gaps.map(gap => <li key={gap}>{gap}</li>)}</ul></>}
       {evidence && <aside ref={evidencePanel} tabIndex={-1} className="evidence" aria-label="Evidência selecionada">
         <h3>{evidence.title}</h3>

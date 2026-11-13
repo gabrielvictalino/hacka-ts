@@ -291,10 +291,14 @@ O comando realiza uma chamada faturável pequena, com pergunta e evidência sint
 as citações recebidas. Não envia o acervo nem altera IAM ou assinaturas. Retorna JSON com
 região, modelo e disponibilidade; código 0 significa invocação e validação bem-sucedidas,
 1 indica falha (por exemplo, `AccessDeniedException`, `ThrottlingException` ou timeout) e
-2 indica modelo não configurado. Mensagens remotas e credenciais não são impressas.
+2 indica modelo não configurado ou configuração inválida. Na configuração inválida, retorna
+`error=configuration_error` e apenas o nome do campo raiz e o tipo de validação (ou a classe
+do erro de parsing), sem valores, contexto, mensagens ou traceback. Mensagens remotas e
+credenciais não são impressas.
 Sem executar esse comando com credenciais válidas, o acesso real permanece não verificado.
 
-O modelo recebe a pergunta, data, perspectiva, filtros e somente os trechos já elegíveis e
+O modelo recebe a pergunta, a mesma data efetiva resolvida para a busca (inclusive quando
+omitida no pedido), perspectiva, filtros e somente os trechos já elegíveis e
 conferidos contra as páginas persistidas. Documentos e pergunta são tratados como dados;
 a instrução de sistema proíbe seguir comandos documentais, completar lacunas ou calcular.
 O backend aceita JSON puro ou envolvido em uma única cerca Markdown (`json` ou sem linguagem),
@@ -306,8 +310,54 @@ ponto recuperado, inclusive os pontos com confirmação completa.
 No MVP a organização é feita por seleção e ordenação de trechos; não se valida uma paráfrase
 arbitrária apenas pela existência de uma citação. Isso preserva condições e negações.
 Os cálculos de datas e valores continuam em `app.regras` e nos endpoints `/api/regras/*`, com
-fatos curados, premissas e memória de cálculo. A consulta não delega cálculos à LLM nem extrai
-automaticamente fatos ou detecta conflitos gerais.
+fatos curados, premissas e memória de cálculo. A consulta também permite um cálculo explícito
+em `calculation`, sem interpretar parâmetros numéricos por LLM nem aceitar resultados do cliente.
+Não há extração automática de fatos ou detecção geral de conflitos.
+
+### Explicar um cálculo na consulta
+
+`POST /perguntar` (ou `/api/questions`) aceita `calculation` opcional. Informe a regra e seus
+parâmetros tipados. Exemplo, substituindo o UUID pelo tema que contém os fatos curados:
+
+```json
+{
+  "topic_id": "00000000-0000-4000-8000-000000000019",
+  "question": "Explique o ressarcimento para uma despesa de R$ 3.000,00.",
+  "reference_date": "2026-11-13",
+  "calculation": {"rule": "ferias.ressarcimento", "amount": 3000}
+}
+```
+
+Regras disponíveis e parâmetros (iguais aos endpoints `/api/regras/*`):
+
+- `ferias.prazos`: `start_date`, opcionais `holidays`, `request_registered_on`, `notice_received_on`.
+- `ferias.ausencia_simultanea`: `team_size`.
+- `ferias.dias_por_faltas`: `absences`.
+- `ferias.ressarcimento` e `inovacao.alcada`: `amount`.
+- `inovacao.orcamento` e `inovacao.pagamento_premiacao`: sem parâmetros adicionais.
+
+A regra explícita define a operação; o texto da pergunta fornece contexto para sua apresentação.
+Pedidos com cálculo são dedicados a essa operação, sem executar busca textual para outras perguntas
+no mesmo texto. Para consultar outro ponto, faça um pedido separado sem `calculation`.
+O servidor executa o mesmo motor Python das rotas de regras usando somente fatos curados do
+tema e dos filtros, com todas as fontes em versões elegíveis na data efetiva. Cada citação é
+reconferida contra a página persistida; sem todos os parâmetros curados elegíveis, retorna
+lacuna e não chama o Bedrock. O cliente não pode enviar resultados, memória ou citações.
+
+A resposta inclui `calculation` (`RuleResult`) com resultados numéricos/datas, memória de cálculo,
+avisos, premissas e fontes. O modelo recebe essa estrutura e explicações determinísticas de cada
+passo para organizar a apresentação. Afirmações calculadas usam `calculation_step` (índice começando
+em zero) e devem copiar a explicação inteira correspondente. O backend rejeita números, unidades,
+memória ou fontes alterados, índices desconhecidos/duplicados e omissão de qualquer passo.
+Uma citação documental sozinha não valida um resultado calculado. Avisos e premissas são preservados
+fora do controle do modelo e exibidos na interface.
+
+Sem modelo ou em contingência, a mesma resposta local conserva todos os resultados e as fontes;
+com modelo, a organização pode mudar, mas a memória e as premissas permanecem iguais. O modo
+`extractive` continua identificando a resposta local, incluindo resultados calculados em código.
+A inferência de cálculos a partir de texto livre e novas regras (por exemplo, multa de Locação)
+não são implementadas aqui. O campo estruturado está disponível pela API/OpenAPI; o formulário
+textual atual continua enviando consultas sem cálculo.
 
 IDs desconhecidos, duplicatas, metadados injetados, texto alterado, JSON inválido, resposta
 vazia, truncamento, bloqueio de conteúdo, perda de cobertura, erros AWS e timeout preservam
