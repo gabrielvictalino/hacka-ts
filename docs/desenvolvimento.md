@@ -297,7 +297,8 @@ Sem executar esse comando com credenciais válidas, o acesso real permanece não
 O modelo recebe a pergunta, data, perspectiva, filtros e somente os trechos já elegíveis e
 conferidos contra as páginas persistidas. Documentos e pergunta são tratados como dados;
 a instrução de sistema proíbe seguir comandos documentais, completar lacunas ou calcular.
-O backend aceita apenas JSON com afirmações literais completas e IDs únicos presentes nas
+O backend aceita JSON puro ou envolvido em uma única cerca Markdown (`json` ou sem linguagem),
+sem prosa antes ou depois. O conteúdo continua exigindo afirmações literais completas e IDs únicos presentes nas
 evidências. Metadados (versão, página, item e trecho) sempre vêm do banco. Lacunas e situação
 da resposta continuam calculadas localmente. A seleção precisa manter evidência de cada
 ponto recuperado, inclusive os pontos com confirmação completa.

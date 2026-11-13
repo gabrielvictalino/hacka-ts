@@ -159,10 +159,7 @@ def test_bedrock_output_is_verified_against_literals(reader, topic, monkeypatch,
     output = output.replace("REAL", baseline["passages"][0]["passage_id"])
 
     class Model:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
+        def close(self):
             pass
 
         def converse(self, **kwargs):
@@ -222,10 +219,7 @@ def test_bedrock_validates_full_excerpt_and_bounds_network_timeout(reader, topic
     monkeypatch.setattr(get_settings(), "bedrock_model_id", "test-model")
 
     class Model:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
+        def close(self):
             pass
 
         def converse(self, **kwargs):
@@ -368,10 +362,7 @@ def bedrock_selection(monkeypatch):
 
     def configure(citations):
         class Model:
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *args):
+            def close(self):
                 pass
 
             def converse(self, **kwargs):
@@ -747,10 +738,7 @@ def test_aws_and_validation_failures_keep_full_response_without_logging_content(
     monkeypatch.setattr(get_settings(), "bedrock_model_id", "test-model")
 
     class Model:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
+        def close(self):
             pass
 
         def converse(self, **kwargs):

@@ -6,6 +6,8 @@ condições e negações. Cálculos pertencem a app.regras, nunca ao modelo.
 """
 
 import json
+import re
+from contextlib import closing
 
 import boto3
 from botocore.config import Config
@@ -51,6 +53,11 @@ def unique_keys(pairs):
 def validate_claims(raw: str, passages: list[Citation]) -> list[Claim]:
     if len(raw.encode("utf-8")) > MAX_RESPONSE_BYTES:
         raise ValueError("Resposta excede o limite de validação.")
+    # Aceitar apenas uma cerca externa completa, sem texto antes/depois.
+    # Não procurar um objeto JSON dentro de prosa nem alterar o conteúdo das afirmações.
+    fenced = re.fullmatch(r"```(?:json)?[ \t]*\r?\n(.*?)\r?\n```", raw.strip(), re.DOTALL)
+    if fenced:
+        raw = fenced[1]
     payload = GeneratedAnswer.model_validate(json.loads(raw, object_pairs_hook=unique_keys))
     available = {str(c.passage_id): c for c in passages}
     seen, claims = set(), []
@@ -74,12 +81,15 @@ def generate_claims(body: QuestionRequest, passages: list[Citation]) -> list[Cla
     )
     if len(request.encode("utf-8")) > MAX_REQUEST_BYTES:
         raise ValueError("Evidências excedem o limite de geração; preservar a resposta extrativa.")
-    with boto3.client(
-        "bedrock-runtime",
-        region_name=settings.bedrock_region,
-        config=Config(
-            connect_timeout=2, read_timeout=settings.bedrock_timeout_seconds, retries={"total_max_attempts": 1}
-        ),
+    # Clientes boto3 expõem close(), mas não o protocolo de context manager.
+    with closing(
+        boto3.client(
+            "bedrock-runtime",
+            region_name=settings.bedrock_region,
+            config=Config(
+                connect_timeout=2, read_timeout=settings.bedrock_timeout_seconds, retries={"total_max_attempts": 1}
+            ),
+        )
     ) as client:
         result = client.converse(
             modelId=settings.bedrock_model_id,

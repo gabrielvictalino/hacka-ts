@@ -34,10 +34,7 @@ def configure(monkeypatch, evidence, *, response=None, failure=None):
     monkeypatch.setattr(check_bedrock, "get_settings", lambda: settings)
 
     class Client:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
+        def close(self):
             pass
 
         def converse(self, **kwargs):
@@ -225,3 +222,76 @@ def test_preflight_validates_synthetic_evidence(monkeypatch, evidence, capsys):
     configure(monkeypatch, synthetic)
     assert check_bedrock.main() == 0
     assert json.loads(capsys.readouterr().out)["citations_validated"]
+
+
+@pytest.mark.parametrize("fence", ["```json\n{}\n```", "```\n{}\n```", " \n```json\r\n{}\r\n```\n "])
+def test_accepts_single_complete_markdown_fence_without_changing_evidence(evidence, fence):
+    payload = json.dumps({"claims": [{"passage_id": str(evidence.passage_id), "text": evidence.excerpt}]})
+    claims = bedrock.validate_claims(fence.format(payload), [evidence])
+    assert claims[0].text == evidence.excerpt
+    assert claims[0].citations == [evidence]
+
+
+@pytest.mark.parametrize(
+    "wrapper",
+    [
+        "Resposta:\n```json\n{}\n```",
+        "```json\n{}\n```\nTexto adicional.",
+        "```python\n{}\n```",
+        "```json\n{}",
+        "{}\n```",
+        "```json\n{}\n```\n```json\n{{}}\n```",
+    ],
+)
+def test_rejects_prose_multiple_fences_and_incomplete_fences(evidence, wrapper):
+    payload = json.dumps({"claims": [{"passage_id": str(evidence.passage_id), "text": evidence.excerpt}]})
+    with pytest.raises(ValueError):
+        bedrock.validate_claims(wrapper.format(payload), [evidence])
+
+
+@pytest.mark.parametrize("text", ["Prazo de 32 dias.", "O prazo de férias é de 30 dias."])
+def test_markdown_fence_does_not_bypass_literal_support(evidence, text):
+    payload = json.dumps({"claims": [{"passage_id": str(evidence.passage_id), "text": text}]})
+    with pytest.raises(ValueError):
+        bedrock.validate_claims(f"```json\n{payload}\n```", [evidence])
+
+
+@pytest.mark.parametrize("failure", [False, True])
+def test_real_boto3_client_is_closed_on_success_and_error(monkeypatch, evidence, failure):
+    # Usa o cliente da versão instalada, sem tráfego AWS, para não inventar sua interface.
+    from unittest.mock import Mock
+
+    from botocore.stub import Stubber
+
+    client = bedrock.boto3.client(
+        "bedrock-runtime",
+        region_name="us-east-1",
+        aws_access_key_id="synthetic-test-key",
+        aws_secret_access_key="synthetic-test-secret",
+    )
+    close = Mock(wraps=client.close)
+    monkeypatch.setattr(client, "close", close)
+    settings, _ = configure(monkeypatch, evidence)
+    monkeypatch.setattr(bedrock.boto3, "client", lambda *args, **kwargs: client)
+    raw = json.dumps({"claims": [{"passage_id": str(evidence.passage_id), "text": evidence.excerpt}]})
+    with Stubber(client) as stubber:
+        if failure:
+            stubber.add_client_error("converse", service_error_code="AccessDeniedException")
+        else:
+            stubber.add_response(
+                "converse",
+                {
+                    "stopReason": "end_turn",
+                    "output": {"message": {"role": "assistant", "content": [{"text": f"```json\n{raw}\n```"}]}},
+                    "usage": {"inputTokens": 100, "outputTokens": 50, "totalTokens": 150},
+                    "metrics": {"latencyMs": 10},
+                },
+            )
+        body = QuestionRequest(topic_id=uuid4(), question="Prazo?")
+        if failure:
+            with pytest.raises(ClientError):
+                bedrock.generate_claims(body, [evidence])
+        else:
+            assert bedrock.generate_claims(body, [evidence])[0].citations == [evidence]
+        stubber.assert_no_pending_responses()
+    close.assert_called_once_with()
