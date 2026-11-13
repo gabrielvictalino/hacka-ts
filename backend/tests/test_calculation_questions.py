@@ -88,15 +88,13 @@ def model(monkeypatch):
                 received.append(payload)
                 if failure == "timeout":
                     raise TimeoutError("indisponível")
-                claims = [
-                    {"calculation_step": c["calculation_step"], "text": c["text"]}
-                    for c in reversed(payload["calculation"]["explanations"])
-                ]
+                explanations = list(reversed(payload["calculation"]["explanations"]))
+                claims = [{"calculation_step": c["calculation_step"]} for c in explanations]
                 if failure == "changed":
-                    claims[0]["text"] = claims[0]["text"].replace("2.500,00", "9.000,00")
+                    # O modelo não pode devolver texto, nem com valores alterados.
+                    claims[0]["text"] = explanations[0]["text"].replace("2.500,00", "9.000,00")
                 if failure == "omitted":
-                    source = payload["evidence"][0]
-                    claims = [{"passage_id": source["passage_id"], "text": source["excerpt"]}]
+                    claims = [{"passage_id": payload["evidence"][0]["passage_id"]}]
                 return {
                     "stopReason": "end_turn",
                     "output": {"message": {"role": "assistant", "content": [{"text": json.dumps({"claims": claims})}]}},

@@ -60,26 +60,16 @@ function VersionCard({ version, onRetry, retrying, retryError }: {
   const period = version.valid_from || version.valid_until
     ? `${br(version.valid_from) || "início não informado"} a ${br(version.valid_until) || "fim não informado"}`
     : "não informada no cabeçalho";
-  return <li className="managed-version">
-    <h4>{version.code || "Sem código"} · {version.title}</h4>
-    <p><span className={`badge status-${version.status}`}>{statusLabels[version.status]}</span>
-      {progress && <span className="layer"> · {progress}</span>}</p>
-    <dl className="facts">
-      <div><dt>Versão</dt><dd>{version.version || "não identificada"}</dd></div>
-      <div><dt>Tipo</dt><dd>{version.document_type || "não identificado"}</dd></div>
-      <div><dt>Fase declarada</dt><dd>{version.declared_phase || "não declarada"}</dd></div>
-      <div><dt>Vigência documentada</dt><dd>{period}</dd></div>
-      <div><dt>Arquivo</dt><dd className="filename">{version.filename}</dd></div>
-    </dl>
-    {version.status === "failed" && version.error && <p className="notice" role="note">{version.error}</p>}
-    {retryError && <p role="alert">{retryError}</p>}
-    <div className="citations">
-      <a className="link-button" href={`/api/documents/${version.id}/file#page=1`} target="_blank" rel="noreferrer">
-        Abrir PDF original</a>
-      {version.status === "failed" && <button className="link-button" disabled={retrying}
-        onClick={() => onRetry(version.id)}>{retrying ? "Reenviando…" : "Tentar novamente"}</button>}
-    </div>
-  </li>;
+  return <tr className="managed-version">
+    <td><strong>{version.code || "Sem código"}</strong><small className="filename">{version.filename}</small></td>
+    <td>{version.title}<details><summary>Metadados</summary><dl className="facts"><div><dt>Tipo</dt><dd>{version.document_type || "não identificado"}</dd></div><div><dt>Fase declarada</dt><dd>{version.declared_phase || "não declarada"}</dd></div><div><dt>Vigência documentada</dt><dd>{period}</dd></div></dl></details></td>
+    <td>{version.version || "não identificada"}</td>
+    <td><span className={`badge status-${version.status}`}>{statusLabels[version.status]}</span>{progress && <small>{progress}</small>}
+      {version.status === "failed" && version.error && <p className="notice" role="note">{version.error}</p>}
+      {retryError && <p role="alert">{retryError}</p>}</td>
+    <td><a className="link-button" href={`/api/documents/${version.id}/file#page=1`} target="_blank" rel="noreferrer">Abrir PDF original</a>
+      {version.status === "failed" && <button className="link-button" disabled={retrying} onClick={() => onRetry(version.id)}>{retrying ? "Reenviando…" : "Tentar novamente"}</button>}</td>
+  </tr>;
 }
 
 export function ManagementPanel({ topics, onTopicsChanged }: {
@@ -220,8 +210,8 @@ export function ManagementPanel({ topics, onTopicsChanged }: {
   }
 
   const failed = versions?.filter(v => v.status === "failed").length ?? 0;
-  return <section aria-labelledby="management-title">
-    <h2 id="management-title">Gestão · Documentos do acervo</h2>
+  return <div className="stack"><section className="panel drop" aria-labelledby="management-title">
+    <h2 id="management-title">Adicionar PDFs ao acervo</h2>
     <p>Envie PDFs com texto pesquisável. Cada arquivo só entra na Consulta depois de concluir o processamento.</p>
 
     <form onSubmit={upload}>
@@ -247,6 +237,7 @@ export function ManagementPanel({ topics, onTopicsChanged }: {
       </form>
     </details>
 
+    </section><section className="panel">
     {error && <p role="alert">{error}</p>}
     <p role="status" className="muted">{status}</p>
     {results.length > 0 && <div aria-live="polite">
@@ -254,14 +245,15 @@ export function ManagementPanel({ topics, onTopicsChanged }: {
       <ul className="upload-results">{results.map((item, index) => <ResultLine key={`${item.filename}-${index}`} item={item} />)}</ul>
     </div>}
 
+    </section><section className="panel table-wrap">
     <h3>Documentos em {topicName || "nenhum tema"}</h3>
     {loading && versions === null && <p role="status">Carregando documentos…</p>}
     {versions && versions.length === 0 && <p>Nenhum documento neste tema. Envie um PDF para começar.</p>}
     {versions && versions.length > 0 && <>
       <p className="muted">{versions.length} versão(ões){failed ? ` · ${failed} com falha` : ""}
         {pending ? " · atualizando o processamento automaticamente" : ""}</p>
-      <ul className="managed-versions">{versions.map(v => <VersionCard key={v.id} version={v} onRetry={retry}
-        retrying={retrying === v.id} retryError={retryErrors[v.id]} />)}</ul>
+      <div className="table-wrap"><table className="managed-versions"><caption>Documentos consultáveis</caption><thead><tr><th>Documento</th><th>Assunto</th><th>Versão</th><th>Situação</th><th>Consulta</th></tr></thead><tbody>{versions.map(v => <VersionCard key={v.id} version={v} onRetry={retry}
+        retrying={retrying === v.id} retryError={retryErrors[v.id]} />)}</tbody></table></div>
     </>}
-  </section>;
+  </section></div>;
 }

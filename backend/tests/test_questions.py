@@ -144,8 +144,9 @@ def test_bedrock_contingency_keeps_identical_evidence(reader, topic, monkeypatch
 @pytest.mark.parametrize(
     "output",
     [
-        '{"claims":[{"passage_id":"inventado","text":"30 dias"}]}',
+        '{"claims":[{"passage_id":"inventado"}]}',
         '{"claims":[]}',
+        '{"claims":[{"passage_id":"REAL"},{"passage_id":"REAL"}]}',
         '{"claims":[{"passage_id":"REAL","text":"999 dias"}]}',
         '{"claims":[{"passage_id":"REAL","text":"30 dias"}]}',
         "não é JSON",
@@ -231,13 +232,7 @@ def test_bedrock_validates_full_excerpt_and_bounds_network_timeout(reader, topic
                 "output": {
                     "message": {
                         "role": "assistant",
-                        "content": [
-                            {
-                                "text": json.dumps(
-                                    {"claims": [{"passage_id": source["passage_id"], "text": source["excerpt"]}]}
-                                )
-                            }
-                        ],
+                        "content": [{"text": json.dumps({"claims": [{"passage_id": source["passage_id"]}]})}],
                     }
                 },
             }
@@ -366,7 +361,7 @@ def bedrock_selection(monkeypatch):
                 pass
 
             def converse(self, **kwargs):
-                payload = {"claims": [{"passage_id": c["passage_id"], "text": c["excerpt"]} for c in citations]}
+                payload = {"claims": [{"passage_id": c["passage_id"]} for c in citations]}
                 return {
                     "stopReason": "end_turn",
                     "output": {"message": {"role": "assistant", "content": [{"text": json.dumps(payload)}]}},
@@ -747,7 +742,7 @@ def test_aws_and_validation_failures_keep_full_response_without_logging_content(
             if failure in {"denied", "throttled"}:
                 code = "AccessDeniedException" if failure == "denied" else "ThrottlingException"
                 raise ClientError({"Error": {"Code": code, "Message": "DADO_REMOTO_PRIVADO"}}, "Converse")
-            claim = {"passage_id": source["passage_id"], "text": literal}
+            claim = {"passage_id": source["passage_id"]}
             if failure == "calculated":
                 claim["text"] = "O prazo calculado é de 32 dias."
             payload = {"claims": [claim, claim] if failure == "duplicate" else [claim]}

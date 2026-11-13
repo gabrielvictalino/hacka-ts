@@ -1,0 +1,13 @@
+{
+  "name": "@ipbot/e2e-ui",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Roteiro de interface do IPBOT no Chromium headless (issue #16).",
+  "scripts": {
+    "browser": "playwright install chromium",
+    "test": "node roteiro_ui.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.49.1"
+  }
+}

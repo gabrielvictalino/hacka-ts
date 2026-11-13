@@ -177,10 +177,12 @@ docker compose -p ipbot-test run --rm --no-deps api ruff check backend
 docker compose -p ipbot-test run --rm --no-deps api ruff format --check backend
 docker compose -p ipbot-test run --rm --no-deps api pytest backend/tests
 docker compose -p ipbot-test run --rm --no-deps frontend npm run build
+docker compose -p ipbot-test run --rm --no-deps frontend npm test
 docker compose -p ipbot-test down -v
+bash scripts/tests/test-dev-local.sh
 ```
 
-Os testes usam PostgreSQL real e PDFs sintéticos gerados na hora. Cobrem página física após página vazia, trecho literal, reenvio concorrente, falha sem páginas parciais, reprocessamento e acesso por perfil. A ingestão verifica cabeçalhos, edições do mesmo documento, itens longos, cláusulas, progresso visível, recuperação após queda, falha de banco no meio do lote e permissões do SSO para upload, lote, reenvio e criação de temas. A atualização de metadados é testada com versões prontas no schema `0001`, incluindo citações curadas e recuperação transacional após falha. As regressões também verificam atendimento de requisições durante upload bloqueado, restauração de original ausente sem alterar citações, novas migrações e múltiplos heads, perspectiva e área na consulta e os formatos de resposta publicados no OpenAPI. A CI também sobe todos os serviços e aguarda os healthchecks.
+Os testes usam PostgreSQL real e PDFs sintéticos gerados na hora. Cobrem página física após página vazia, trecho literal, reenvio concorrente, falha sem páginas parciais, reprocessamento e acesso por perfil. A ingestão verifica cabeçalhos, edições do mesmo documento, itens longos, cláusulas, progresso visível, recuperação após queda, falha de banco no meio do lote e permissões do SSO para upload, lote, reenvio e criação de temas. A atualização de metadados é testada com versões prontas no schema `0001`, incluindo citações curadas e recuperação transacional após falha. As regressões também verificam atendimento de requisições durante upload bloqueado, restauração de original ausente sem alterar citações, novas migrações e múltiplos heads, perspectiva e área na consulta e os formatos de resposta publicados no OpenAPI. A CI também sobe todos os serviços, aguarda os healthchecks, importa um acervo sintético e executa os roteiros de ponta a ponta de API e interface (Chromium). Para repeti-los, veja [`tests/e2e/README.md`](../tests/e2e/README.md).
 
 Para atualizar dependências Python, edite `backend/requirements.in` e gere o lock com `uv pip compile backend/requirements.in --python-version 3.12 --output-file backend/requirements.txt --upgrade`. O frontend usa `npm ci` e `package-lock.json` versionado.
 
@@ -303,14 +305,17 @@ O modelo recebe a pergunta, a mesma data efetiva resolvida para a busca (inclusi
 omitida no pedido), perspectiva, filtros e somente os trechos já elegíveis e
 conferidos contra as páginas persistidas. Documentos e pergunta são tratados como dados;
 a instrução de sistema proíbe seguir comandos documentais, completar lacunas ou calcular.
-O backend aceita JSON puro ou envolvido em uma única cerca Markdown (`json` ou sem linguagem),
-sem prosa antes ou depois. O conteúdo continua exigindo afirmações literais completas e IDs únicos presentes nas
-evidências. Metadados (versão, página, item e trecho) sempre vêm do banco. Lacunas e situação
+O modelo devolve **somente identificadores, na ordem escolhida**:
+`{"claims":[{"passage_id":"<UUID recebido>"}]}` ou, em cálculos, `{"claims":[{"calculation_step":0}]}`.
+Qualquer outro campo, inclusive `text`, é rejeitado. O backend aceita JSON puro ou envolvido em uma
+única cerca Markdown (`json` ou sem linguagem), sem prosa antes ou depois, e exige IDs presentes nas
+evidências elegíveis, sem repetição. Texto e metadados (versão, página, item e trecho completo) de cada
+afirmação são montados pelo backend a partir da evidência do banco. Lacunas e situação
 da resposta continuam calculadas localmente. A seleção precisa manter evidência de cada
 ponto recuperado, inclusive os pontos com confirmação completa.
 
-No MVP a organização é feita por seleção e ordenação de trechos; não se valida uma paráfrase
-arbitrária apenas pela existência de uma citação. Isso preserva condições e negações.
+No MVP a organização é feita por seleção e ordenação de trechos; o modelo não escreve texto,
+e não há resumo nem paráfrase. Isso preserva condições e negações.
 Os cálculos de datas e valores continuam em `app.regras` e nos endpoints `/api/regras/*`, com
 fatos curados, premissas e memória de cálculo. A consulta também permite um cálculo explícito
 em `calculation`, sem interpretar parâmetros numéricos por LLM nem aceitar resultados do cliente.
@@ -350,9 +355,9 @@ lacuna e não chama o Bedrock. O cliente não pode enviar resultados, memória o
 
 A resposta inclui `calculation` (`RuleResult`) com resultados numéricos/datas, memória de cálculo,
 avisos, premissas e fontes. O modelo recebe essa estrutura e explicações determinísticas de cada
-passo para organizar a apresentação. Afirmações calculadas usam `calculation_step` (índice começando
-em zero) e devem copiar a explicação inteira correspondente. O backend rejeita números, unidades,
-memória ou fontes alterados, índices desconhecidos/duplicados e omissão de qualquer passo.
+passo para organizar a apresentação. O modelo indica cada passo apenas por `calculation_step` (índice
+começando em zero); a explicação, os números, a memória e as fontes vêm do backend. O backend rejeita
+texto enviado pelo modelo, índices desconhecidos/duplicados e omissão de qualquer passo.
 Uma citação documental sozinha não valida um resultado calculado. Avisos e premissas são preservados
 fora do controle do modelo e exibidos na interface.
 

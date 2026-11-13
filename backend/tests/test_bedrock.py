@@ -49,13 +49,7 @@ def configure(monkeypatch, evidence, *, response=None, failure=None):
                     "output": {
                         "message": {
                             "role": "assistant",
-                            "content": [
-                                {
-                                    "text": json.dumps(
-                                        {"claims": [{"passage_id": str(evidence.passage_id), "text": evidence.excerpt}]}
-                                    )
-                                }
-                            ],
+                            "content": [{"text": json.dumps({"claims": [{"passage_id": str(evidence.passage_id)}]})}],
                         }
                     },
                 }
@@ -93,10 +87,24 @@ def test_converse_sends_only_received_evidence_and_preserves_metadata(monkeypatc
     assert "calcule" in calls[0]["system"][0]["text"]
 
 
+def test_text_and_citation_come_from_eligible_evidence_in_model_order(evidence):
+    other = evidence.model_copy(update={"passage_id": uuid4(), "excerpt": "Não se aplica a estagiários."})
+    raw = json.dumps({"claims": [{"passage_id": str(other.passage_id)}, {"passage_id": str(evidence.passage_id)}]})
+    claims = bedrock.validate_claims(raw, [evidence, other])
+    assert [c.text for c in claims] == [other.excerpt, evidence.excerpt]
+    assert [c.citations for c in claims] == [[other], [evidence]]
+
+
+def test_prompt_asks_only_for_identifiers():
+    assert "SOMENTE identificadores" in bedrock.SYSTEM_PROMPT
+    assert '"text"' not in bedrock.SYSTEM_PROMPT
+
+
 @pytest.mark.parametrize(
     "change",
     [
         "unknown",
+        "literal_text",
         "shortened",
         "calculated",
         "duplicate",
@@ -108,10 +116,13 @@ def test_converse_sends_only_received_evidence_and_preserves_metadata(monkeypatc
     ],
 )
 def test_rejects_unsupported_claims_and_untrusted_metadata(evidence, change):
-    claim = {"passage_id": str(evidence.passage_id), "text": evidence.excerpt}
+    claim = {"passage_id": str(evidence.passage_id)}
     payload = {"claims": [claim]}
     if change == "unknown":
         claim["passage_id"] = str(uuid4())
+    elif change == "literal_text":
+        # Nem o trecho literal é aceito: o texto sempre vem do banco.
+        claim["text"] = evidence.excerpt
     elif change == "shortened":
         claim["text"] = "O prazo de férias é de 30 dias."
     elif change == "calculated":
@@ -127,7 +138,7 @@ def test_rejects_unsupported_claims_and_untrusted_metadata(evidence, change):
     elif change == "null":
         payload = None
     elif change == "wrong_type":
-        claim["text"] = 30
+        claim["passage_id"] = 30
     with pytest.raises((ValueError, ValidationError)):
         bedrock.validate_claims(json.dumps(payload), [evidence])
 
@@ -145,13 +156,7 @@ def test_rejects_interrupted_generation_even_if_json_is_valid(monkeypatch, evide
         "output": {
             "message": {
                 "role": "assistant",
-                "content": [
-                    {
-                        "text": json.dumps(
-                            {"claims": [{"passage_id": str(evidence.passage_id), "text": evidence.excerpt}]}
-                        )
-                    }
-                ],
+                "content": [{"text": json.dumps({"claims": [{"passage_id": str(evidence.passage_id)}]})}],
             }
         },
     }
@@ -226,7 +231,7 @@ def test_preflight_validates_synthetic_evidence(monkeypatch, evidence, capsys):
 
 @pytest.mark.parametrize("fence", ["```json\n{}\n```", "```\n{}\n```", " \n```json\r\n{}\r\n```\n "])
 def test_accepts_single_complete_markdown_fence_without_changing_evidence(evidence, fence):
-    payload = json.dumps({"claims": [{"passage_id": str(evidence.passage_id), "text": evidence.excerpt}]})
+    payload = json.dumps({"claims": [{"passage_id": str(evidence.passage_id)}]})
     claims = bedrock.validate_claims(fence.format(payload), [evidence])
     assert claims[0].text == evidence.excerpt
     assert claims[0].citations == [evidence]
@@ -244,7 +249,7 @@ def test_accepts_single_complete_markdown_fence_without_changing_evidence(eviden
     ],
 )
 def test_rejects_prose_multiple_fences_and_incomplete_fences(evidence, wrapper):
-    payload = json.dumps({"claims": [{"passage_id": str(evidence.passage_id), "text": evidence.excerpt}]})
+    payload = json.dumps({"claims": [{"passage_id": str(evidence.passage_id)}]})
     with pytest.raises(ValueError):
         bedrock.validate_claims(wrapper.format(payload), [evidence])
 
@@ -273,7 +278,7 @@ def test_real_boto3_client_is_closed_on_success_and_error(monkeypatch, evidence,
     monkeypatch.setattr(client, "close", close)
     settings, _ = configure(monkeypatch, evidence)
     monkeypatch.setattr(bedrock.boto3, "client", lambda *args, **kwargs: client)
-    raw = json.dumps({"claims": [{"passage_id": str(evidence.passage_id), "text": evidence.excerpt}]})
+    raw = json.dumps({"claims": [{"passage_id": str(evidence.passage_id)}]})
     with Stubber(client) as stubber:
         if failure:
             stubber.add_client_error("converse", service_error_code="AccessDeniedException")
@@ -352,7 +357,7 @@ def test_calculated_values_and_sources_are_sent_to_model(monkeypatch, evidence, 
         "output": {
             "message": {
                 "role": "assistant",
-                "content": [{"text": json.dumps({"claims": [{"calculation_step": 0, "text": explanation.text}]})}],
+                "content": [{"text": json.dumps({"claims": [{"calculation_step": 0}]})}],
             }
         },
     }
@@ -371,13 +376,15 @@ def test_calculated_values_and_sources_are_sent_to_model(monkeypatch, evidence, 
     assert sent["explanations"][0]["text"] == explanation.text
 
 
-@pytest.mark.parametrize("change", ["value", "source", "duplicate", "index", "bool", "omitted"])
+@pytest.mark.parametrize("change", ["value", "literal_text", "source", "duplicate", "index", "bool", "omitted"])
 def test_calculated_explanations_cannot_change_results_sources_or_omit_steps(evidence, calculated, change):
     explanation = bedrock.calculation_claims(calculated)[0]
-    claim = {"calculation_step": 0, "text": explanation.text}
+    claim = {"calculation_step": 0}
     payload = {"claims": [claim]}
     if change == "value":
         claim["text"] = explanation.text.replace("912,50", "999,00")
+    elif change == "literal_text":
+        claim["text"] = explanation.text
     elif change == "source":
         claim["citations"] = [evidence.model_dump(mode="json")]
     elif change == "duplicate":
@@ -387,7 +394,7 @@ def test_calculated_explanations_cannot_change_results_sources_or_omit_steps(evi
     elif change == "bool":
         claim["calculation_step"] = False
     elif change == "omitted":
-        payload["claims"] = [{"passage_id": str(evidence.passage_id), "text": evidence.excerpt}]
+        payload["claims"] = [{"passage_id": str(evidence.passage_id)}]
     with pytest.raises(ValueError):
         bedrock.validate_claims(json.dumps(payload), [evidence], calculated)
 
@@ -395,7 +402,7 @@ def test_calculated_explanations_cannot_change_results_sources_or_omit_steps(evi
 def test_calculation_organizes_every_step_without_dropping_sources(evidence, calculated):
     calculated.steps.append(calculated.steps[0].model_copy(update={"label": "Segundo resultado"}))
     explanations = bedrock.calculation_claims(calculated)
-    payload = {"claims": [{"calculation_step": c.calculation_step, "text": c.text} for c in reversed(explanations)]}
+    payload = {"claims": [{"calculation_step": c.calculation_step} for c in reversed(explanations)]}
     assert bedrock.validate_claims(json.dumps(payload), [evidence], calculated) == list(reversed(explanations))
     payload["claims"].pop()
     with pytest.raises(ValueError, match="omitiu"):
