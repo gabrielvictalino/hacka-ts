@@ -2,11 +2,18 @@
 
 Atualizado em 13/11/2026. Trabalho da issue #12 (Consulta e Gestão no React).
 
-## Branch e commit
+## Branch e commits
 
 - Branch local `feat/12-consulta-gestao-react`, criada de `origin/dev` `19d2712`. **Sem push** e sem PR.
-- Commit `ef20264` `feat(frontend): integra Consulta e Gestão com upload e evidência (#12)`.
-- Este handoff e `.kiro/steering/` vão em um commit de documentação separado.
+- `ef20264` `feat(frontend): integra Consulta e Gestão com upload e evidência (#12)`.
+- `8d52043` `docs(kiro): registra steering e handoff da #12`.
+- Correções da revisão final e esta atualização do handoff em commits posteriores (ver `git log origin/dev..`).
+
+## Revisão final do diff
+
+- Só arquivos de `frontend/src`, `.kiro/steering` e `docs/handoff-kiro.md`. Nenhuma mudança no backend, nos contratos, nas migrações ou nas dependências.
+- Corrigido na revisão: a página tinha perdido o `<h1>`; o status `divergent` (previsto no contrato, ainda não emitido) seria rotulado como "trechos que não confirmam"; "Tentar novamente" deixava falha de rede sem mensagem.
+- Mudança intencional de comportamento: a lista "Temas do acervo" saiu da tela inicial. Os temas continuam visíveis nos seletores de Consulta e Gestão, e a Gestão lista os documentos por tema.
 
 ## O que mudou
 
@@ -31,6 +38,8 @@ Nenhuma rota, contrato ou permissão do backend foi alterado.
 | Roteiro de API pelo proxy do Vite, com acervo importado e fatos publicados | 25/25 verificações |
 | Interface no Chromium 131 headless (Playwright), desktop 1280×900 e celular 375×740 | 29/29 verificações |
 
+Repetido após as correções da revisão final, com os mesmos resultados (290 testes; 25/25; 29/29).
+
 O roteiro de interface cobre: ausência de formulário de login; abas por permissão; AC-01 sustentado com fonte `NG_111 · 3.0.0 · p. 2 · 4.3.1` logo abaixo; abertura do PDF em `#page=2` com a sessão; foco no painel de evidência e retorno; resposta preservada ao ir e voltar da Gestão; upload em lote com resultado por arquivo; falha de PDF sem texto com motivo; atualização automática até "Pronto para consulta"; "Tentar novamente"; ativação da aba pelo teclado; empregado sem aba nem área de upload e com 403 na API; "Ver para" registrado no resultado sem conceder upload; sem rolagem horizontal no celular; sem erros no console (exceto o 401 esperado de `/eu` sem sessão).
 
 **Não verificado:** o aviso de geração indisponível com Bedrock configurado (os testes não habilitaram chamadas AWS; o texto vem de `notice`, sem lógica nova); leitores de tela reais; navegadores além do Chromium.
@@ -42,12 +51,25 @@ Um merge de teste, feito numa worktree descartável e já desfeito, conflita só
 - `QuestionPanel.tsx`: manter a ordem nova e inserir `<DivergenceNotices notices={result.divergence_notices ?? []} />` logo após a linha do `result.notice`.
 - `main.tsx`: manter a estrutura nova e renderizar `DivergencePanel` **dentro da área de Gestão**, após o `ManagementPanel`, com a condição `identity.permissions.includes("alerts:read-details")`.
 
+A posição segue a especificação, não só a compilação: a #15 pede "aviso curto na Consulta e os detalhes completos apenas na Gestão, respeitando o perfil da sessão", e a especificação (D13 e a tabela Consulta × Gestão) diz o mesmo. O aviso curto da Consulta é o `DivergenceNotices` que a PR #33 já põe em `QuestionPanel` e `ValidityPanel`.
+
+**Ressalva de permissão:** a aba Gestão aparece com `documents:ingest`, e o painel exige `alerts:read-details`. Hoje as duas vêm juntas, só no perfil `gestao` (`backend/app/auth.py`). Se forem separadas, mostrar a aba para quem tiver qualquer uma das duas e renderizar `ManagementPanel` só com `documents:ingest`.
+
 ## Ambiente do Kiro usado (específico desta máquina, fora do repositório)
+
+Comandos exatos de início, parada e validação, locais de configuração e dados e recuperação após reiniciar: `/kiro/.tools/LEIA-ME.md`. Resumo:
+
+```sh
+/kiro/.tools/ipbot-dev.sh start | status | stop   # PostgreSQL, worker, API e frontend
+```
+
+Persistência verificada: `/kiro` e a pasta pessoal ficam no disco raiz do servidor (XFS) e persistem entre comandos e reconexões; `/tmp` e `/dev/shm` são apagados ao reiniciar. Os serviços sobrevivem ao fim de cada comando, mas não voltam sozinhos após um reboot. **Não confirmado** se a máquina e o disco sobrevivem ao fim da sessão ou do evento (conta AWS do evento com limpeza automática). O GitHub é o único lugar garantido para o código.
+
 
 - Linux na AWS, sem Docker nem `sudo`. As worktrees do computador anterior não estão acessíveis aqui; não foram transportadas.
 - PostgreSQL 16.2 dos binários do pacote Python `pgserver==0.1.4`, numa venv de ferramentas fora do repositório. Cluster exclusivo, só em `127.0.0.1:55432`, com bancos `ipbot_dev` (suíte de testes) e `ipbot_e2e` (acervo importado, arquivos de teste enviados pela interface e fatos publicados). Credenciais aleatórias em arquivo `600` fora do repositório. Configurado com `dynamic_shared_memory_type = mmap`, porque esta máquina limpa `/dev/shm` ao fim de cada sessão.
 - Chromium do Playwright 1.49.1 com bibliotecas gráficas e fontes DejaVu extraídas de RPMs oficiais para uma pasta local (sem instalar no sistema).
-- Serviços parados ao final. O banco preserva os dados.
+- Estado dos serviços: conferir com `/kiro/.tools/ipbot-dev.sh status`. O banco preserva os dados ao parar.
 
 ## Pendências confirmadas
 
