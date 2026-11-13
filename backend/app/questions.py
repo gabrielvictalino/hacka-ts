@@ -35,13 +35,24 @@ SUCCESSION = re.compile(
 )
 # A negação deve governar a declaração, não outra ação da mesma frase.
 NEGATED_SUCCESSION = re.compile(r"\b(não|nunca|jamais|tampouco|nem)\b", re.I)
+UNCONFIRMED_PROPOSITION = re.compile(
+    r"\b(?:não|nunca|jamais|tampouco)\s+(?:se\s+)?(?:(?:deve|pode)\s+)?"
+    r"(?:confirm\w*|afirm\w*|comprov\w*|garant\w*|assegur\w*|conclu\w*)\b.*\bque\b",
+    re.I | re.S,
+)
 REJECTED_PROPOSITION = re.compile(r"^\s*[,\"”']*\s*não\s+(?:procede|é\s+verdadeira|se\s+confirma)", re.I)
 
 
 def affirmative_successions(header):
     for sentence in re.split(r"(?<=[.!?;])\s+", header):
         for declaration in SUCCESSION.finditer(sentence):
-            prefix = re.split(r",|;|\b(?:mas|porém|e)\b", sentence[: declaration.start()], flags=re.I)[-1]
+            # Vírgulas podem delimitar um inciso, sem encerrar o alcance de “não”.
+            prefix = re.sub(r",[^,]*,|\([^)]*\)", " ", sentence[: declaration.start()])
+            prefix = re.split(r"\b(?:mas|porém)\b", prefix, flags=re.I)[-1]
+            # A negação de “confirma/afirma que” governa também verbos coordenados.
+            if UNCONFIRMED_PROPOSITION.search(prefix):
+                continue
+            prefix = re.split(r"\be\b", prefix, flags=re.I)[-1]
             if NEGATED_SUCCESSION.search(prefix):
                 continue
             if REJECTED_PROPOSITION.search(sentence[declaration.end() :]):

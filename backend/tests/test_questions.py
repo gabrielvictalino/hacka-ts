@@ -436,6 +436,10 @@ def test_other_action_or_comparison_never_supplies_requested_deadline(reader, to
         "Esta norma não substitui a NG_111 versão 2.0.0.",
         "Esta norma não\nsubstitui a NG_111 versão 2.0.0.",
         "Esta norma nunca substitui a NG_111 versão 2.0.0.",
+        "Não se confirma, nesta revisão, que esta norma substitui a NG_111 versão 2.0.0.",
+        "Não se confirma, nesta revisão e nas anteriores, que esta norma substitui a NG_111 versão 2.0.0.",
+        "Não se deve afirmar, na revisão atual, que esta norma substitui a NG_111 versão 2.0.0.",
+        "Não se confirma que esta norma altera o regulamento e substitui a NG_111 versão 2.0.0.",
         "Não se deve afirmar que esta norma substitui a NG_111 versão 2.0.0.",
         "A afirmação de que esta norma substitui a NG_111 versão 2.0.0 não procede.",
     ],
@@ -526,6 +530,7 @@ def test_ac01_original_item_confirms_its_explicit_deadline(reader, topic, questi
         "Esta norma substitui a NG_111 versão 2.0.0, sem alterar os procedimentos de solicitação.",
         "Esta norma não altera os procedimentos de solicitação, mas substitui a NG_111 versão 2.0.0.",
         "Esta norma substitui a NG_111 versão 2.0.0 e não modifica os procedimentos de solicitação.",
+        "Nesta revisão, esta norma substitui a NG_111 versão 2.0.0.",
     ],
 )
 def test_negation_of_another_action_does_not_cancel_succession(reader, topic, declaration):
@@ -549,3 +554,51 @@ def test_negation_of_another_action_does_not_cancel_succession(reader, topic, de
     assert {c["version_id"] for c in current["passages"]} == {str(new)}
     assert reader.get(f"/api/citations/{old_source['passage_id']}").json() == old_source
     assert reader.get(f"/api/documents/{old}/file").content == content
+
+
+@pytest.mark.parametrize(
+    "literal",
+    [
+        "O prazo de férias é de 45 dias, salvo em caso de cancelamento.",
+        "O prazo de férias é de 45 dias, exceto em caso de cancelamento.",
+        "O prazo de férias é de 45 dias, com exceção do cancelamento.",
+        "O prazo de férias é de 45 dias, à exceção do cancelamento.",
+        "O prazo de férias é de 45 dias, ressalvado o cancelamento.",
+        "Salvo em caso de cancelamento, o prazo de férias é de 45 dias.",
+        "O prazo de férias, salvo em caso de cancelamento, é de 45 dias.",
+    ],
+)
+def test_exception_does_not_assign_general_deadline_to_excluded_action(reader, topic, literal):
+    ingest(topic, [literal])
+    excluded = ask(reader, topic, "Qual o prazo para cancelar férias?")
+    assert excluded["status"] == "partial" and excluded["gaps"]
+    assert excluded["claims"][0]["text"] == literal
+    general = ask(reader, topic, "Qual o prazo de férias?")
+    assert general["status"] == "supported" and not general["gaps"]
+    assert general["claims"][0]["text"] == literal
+
+
+def test_exception_does_not_assign_general_amount_to_excluded_action(reader, topic):
+    literal = "O valor de locação é de R$ 500,00, salvo em caso de cancelamento."
+    ingest(topic, [literal])
+    result = ask(reader, topic, "Qual o valor de cancelamento de locação?")
+    assert result["status"] == "partial" and result["gaps"]
+    assert result["claims"][0]["text"] == literal
+
+
+def test_separate_explicit_rule_can_confirm_action_excluded_from_general_rule(reader, topic):
+    literal = (
+        "O prazo de férias é de 45 dias, salvo em caso de cancelamento. O prazo para cancelar férias é de 5 dias úteis."
+    )
+    ingest(topic, [literal])
+    result = ask(reader, topic, "Qual o prazo para cancelar férias?")
+    assert result["status"] == "supported" and not result["gaps"]
+    assert result["claims"][0]["text"] == literal
+
+
+def test_exception_qualifier_does_not_hide_explicit_rule_for_requested_action(reader, topic):
+    literal = "O prazo para cancelar férias é de 5 dias úteis, salvo nos casos de emergência."
+    ingest(topic, [literal])
+    result = ask(reader, topic, "Qual o prazo para cancelar férias?")
+    assert result["status"] == "supported" and not result["gaps"]
+    assert result["claims"][0]["text"] == literal

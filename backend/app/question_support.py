@@ -35,6 +35,25 @@ CONNECTORS = set(
 )
 
 
+EXCLUSION = re.compile(r"\b(?:salvo|exceto|ressalvad[oa]s?|excluíd[oa]s?|(?:com|à)\s+exceção)\b", re.I)
+
+
+def affirmative_scope(sentence):
+    """Uma ação citada como exceção não pertence à regra quantitativa geral."""
+    while match := EXCLUSION.search(sentence):
+        before = sentence[: match.start()].rstrip(" ,")
+        # Uma ressalva depois da medida não fornece outro sujeito para essa medida.
+        if TIME.search(before) or MONEY.search(before):
+            return before
+        remainder = sentence[match.end() :]
+        boundary = re.search(r"(?<!\d),|,(?!\d)", remainder)
+        if not boundary:
+            return before
+        # Exceção inicial ou intercalada: conserva a oração geral depois da vírgula.
+        sentence = before + " " + remainder[boundary.end() :]
+    return sentence.strip()
+
+
 def normalize_terms(value):
     value = re.sub(r"\bquantos?\s+(?:dias?|horas?|meses)\b", "prazo", value, flags=re.I)
     value = re.sub(r"\b(?:antecedência|antecedencia)\b", "prazo", value, flags=re.I)
@@ -116,7 +135,8 @@ def support_assertions(excerpt, question, scope):
     sentences = re.split(r"(?<=[.!?;])\s+", " ".join(excerpt.split()))
     kind = quantity_kind(question)
     for sentence in sentences:
-        if UNCERTAIN.search(sentence):
+        sentence = affirmative_scope(sentence)
+        if not sentence or UNCERTAIN.search(sentence):
             continue
         if kind and not direct_quantity(sentence, question, scope, kind):
             continue

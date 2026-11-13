@@ -200,7 +200,11 @@ sem substituir a evidência da ação e do número no item. O texto literal apre
 
 Para prazo ou valor, a medida precisa seguir um marcador da mesma ação. Comparações,
 encaminhamentos e frases que misturam ações diferentes continuam parciais: os 45 dias de
-solicitação não confirmam o prazo de cancelamento. Qualificadores e condições após a medida
+solicitação não confirmam o prazo de cancelamento. Uma ação mencionada somente em uma
+exceção (“salvo”, “exceto”, “com exceção de”) não recebe o prazo ou valor da regra geral.
+A confirmação avalia a oração afirmativa, incluindo exceções iniciais ou intercaladas, e a
+citação continua exibindo a condição completa. Uma regra explícita em outra frase pode
+confirmar a ação excluída da regra geral. Qualificadores e condições após a medida
 são preservados, como “antecedência mínima de 45 dias corridos do início de gozo” no item 4.3.1
 original. As quebras de linha da extração não interrompem a afirmação. A classificação não
 exige igualdade literal entre o sujeito da frase e a pergunta.
@@ -220,7 +224,9 @@ A sucessão considera `superseded_by` ou declaração inequívoca `Substitui a v
 2.0.0` / `Substitui a NG_111 versão 2.0.0` na primeira página do mesmo documento, com início
 confirmado da sucessora. Quando a declaração inclui um código, ele precisa corresponder ao
 documento substituído. Uma negação que governa a substituição (inclusive “não\nsubstitui”) ou
-rejeita a própria afirmação não estabelece sucessão. Negar outra ação, como “sem alterar os
+rejeita a própria afirmação não estabelece sucessão. Incisos entre vírgulas não encerram
+o alcance de “não se confirma que”; a v2 continua elegível quando a sucessão é incerta.
+Negar outra ação, como “sem alterar os
 procedimentos” depois da versão citada, preserva a sucessão afirmativa. A fase “Versão anterior”
 continua elegível antes do início da sucessora. Não se presume
 substituição por ordem de upload ou maior número da edição. Fases anteriores com aplicabilidade
