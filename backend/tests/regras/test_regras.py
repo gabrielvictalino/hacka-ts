@@ -35,6 +35,7 @@ def as_published(fact) -> CuratedFact:
         curated_at=datetime.now(timezone.utc),
         citations=[
             Citation(
+                document_id=uuid5(NAMESPACE_URL, source.code),
                 version_id=uuid5(NAMESPACE_URL, f"{source.code}/{source.version}"),
                 # Como no banco, fontes do mesmo item e página resolvem a mesma passagem.
                 passage_id=uuid5(NAMESPACE_URL, f"{source.code}/{source.version}/{source.page}/{source.item}"),

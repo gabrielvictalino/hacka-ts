@@ -13,12 +13,13 @@ from app.config import get_settings
 from app.contracts import Citation, Claim, QuestionRequest, QuestionResponse
 from app.db import get_engine
 from app.document_parser import CODE
+from app.question_support import normalize_terms, search_terms, support_assertions
 
 logger = logging.getLogger(__name__)
 # Palavras de formulação da pergunta não são requisitos de evidência.
 QUESTION_WORDS = re.compile(
     r"\b(qual|quais|quanto|quantos|quanta|quantas|como|quando|onde|quem|posso|podemos|"
-    r"gostaria|saber|preciso|existe|existem|diga|explique|informe|sobre)\b",
+    r"gostaria|saber|preciso|devo|devemos|existe|existem|diga|explique|informe|sobre)\b",
     re.I,
 )
 PERSPECTIVES = {
@@ -32,44 +33,20 @@ SUCCESSION = re.compile(
     r"(?:versão\s*|v\s*)(?P<version>\d+(?:\.\d+)*)\b",
     re.I,
 )
-# A recuperação usa a passagem inteira; suporte exige uma afirmação local.
-SENTENCE_BOUNDARY = r"(?<=[.!?;])\s+|[\r\n]+"
-UNCERTAIN_STATEMENT = (
-    r"consult[ae]|encaminh|entre em contato|a confirmar|"
-    r"não (consta|há|informa|especifica|define|estabelece)|"
-    r"não (está |foi |é )?(informad|definid|especificad|estabelecid)|"
-    r"sem (confirmação|definição|informação|prazo|valor)"
-)
-
-
-NEGATED_SUCCESSION = re.compile(r"\b(não|nunca|jamais|tampouco|nem|sem)\b", re.I)
+# A negação deve governar a declaração, não outra ação da mesma frase.
+NEGATED_SUCCESSION = re.compile(r"\b(não|nunca|jamais|tampouco|nem)\b", re.I)
+REJECTED_PROPOSITION = re.compile(r"^\s*[,\"”']*\s*não\s+(?:procede|é\s+verdadeira|se\s+confirma)", re.I)
 
 
 def affirmative_successions(header):
-    # Mantém quebras de linha dentro da frase para reconhecer “não\nsubstitui”.
     for sentence in re.split(r"(?<=[.!?;])\s+", header):
-        if not NEGATED_SUCCESSION.search(sentence):
-            yield from SUCCESSION.finditer(sentence)
-
-
-def answer_pattern(question):
-    """Só atribuições quantitativas simples podem confirmar a pergunta localmente."""
-    if re.search(r"\b(quem|responsável)\b", question, re.I):
-        return ""
-    if re.search(r"prazo|antecedência|quantos?\s+(dias?|horas?|mês|meses)", question, re.I):
-        value = r"\d+(?:[.,]\d+)?\s*(?:dias?|horas?|semanas?|mês|meses|anos?)|\d{2}/\d{2}/\d{4}|\d{4}-\d{2}-\d{2}"
-    elif re.search(r"valor|cust[oa]|preço|quanto", question, re.I):
-        value = r"R\$\s*\d[\d.,]*|\d+(?:[.,]\d+)?\s*(?:reais|%|por cento)"
-    else:
-        return ""
-    # A captura é o sujeito da atribuição. Seus lexemas devem corresponder exatamente
-    # aos da pergunta; uma comparação ou outra ação não pode fornecer o número.
-    # Condições mais complexas permanecem como trechos relacionados, com lacuna.
-    return (
-        r"^\s*(.*?)\s*(?:[Éé]\s+(?:de\s+)?|[Ss]erá\s+(?:de\s+)?|de\s+|:\s*)?"
-        rf"(?:{value})(?:\s+(?:corridos|úteis))?(?:\s+por\s+(?:mês|ano|dia))?"
-        r"(?:\s+para\s+[A-Z]{2,10})?[.!]?\s*$"
-    )
+        for declaration in SUCCESSION.finditer(sentence):
+            prefix = re.split(r",|;|\b(?:mas|porém|e)\b", sentence[: declaration.start()], flags=re.I)[-1]
+            if NEGATED_SUCCESSION.search(prefix):
+                continue
+            if REJECTED_PROPOSITION.search(sentence[declaration.end() :]):
+                continue
+            yield declaration
 
 
 CITATION_COLUMNS = """v.id AS version_id, v.document_id, s.id AS passage_id,
@@ -170,7 +147,7 @@ def reference_date(body):
 
 def query_terms(value):
     value = re.sub(r"\b(?:\d{2}/\d{2}/\d{4}|\d{4}-\d{2}-\d{2})\b", " ", value)
-    value = QUESTION_WORDS.sub(" ", value)
+    value = QUESTION_WORDS.sub(" ", normalize_terms(value))
     return value.strip(" ?.,;!\n")
 
 
@@ -190,37 +167,21 @@ def answer(body: QuestionRequest) -> QuestionResponse:
                 connection.execute(
                     text(rf"""
                 WITH query AS (
-                    SELECT plainto_tsquery('portuguese', :question) AS full_query,
-                    replace(plainto_tsquery('portuguese', :question)::text, ' & ', ' | ')::tsquery AS broad_query,
+                    SELECT replace(plainto_tsquery('portuguese', :search)::text, ' & ', ' | ')::tsquery AS broad_query,
                     replace(plainto_tsquery('portuguese', :perspective)::text, ' & ', ' | ')::tsquery AS perspective
                 )
-                SELECT {CITATION_COLUMNS}, p.text AS page_text,
-                    EXISTS (
-                        SELECT 1 FROM regexp_split_to_table(s.excerpt, :sentence_boundary) AS assertion(sentence)
-                        WHERE to_tsvector('portuguese', sentence) @@ q.full_query
-                            AND sentence !~* :uncertain
-                            AND (:answer_pattern = '' OR (
-                                sentence !~* '\m(não|nem|nunca|jamais)\M'
-                                AND tsvector_to_array(to_tsvector('portuguese',
-                                    (regexp_match(regexp_replace(sentence, :heading, '', 'i'), :answer_pattern))[1]
-                                )) = tsvector_to_array(to_tsvector('portuguese', :question))
-                            ))
-                    ) AS complete
+                SELECT {CITATION_COLUMNS}, p.text AS page_text
                 {CITATION_JOINS} CROSS JOIN query q
                 WHERE v.id = ANY(CAST(:versions AS uuid[])) AND v.status='ready'
                     AND v.topic_id=:topic AND s.search_vector @@ q.broad_query
                     AND (CAST(:area AS text) IS NULL OR s.search_vector @@ plainto_tsquery('portuguese', :area))
                     AND (:perspective = '' OR s.search_vector @@ q.perspective)
-                ORDER BY complete DESC, ts_rank_cd(s.search_vector, q.broad_query) DESC,
+                ORDER BY ts_rank_cd(s.search_vector, q.broad_query) DESC,
                     v.id, p.physical_page, s.ordinal
-                LIMIT 8
+                LIMIT 48
             """),
                     {
-                        "question": query_terms(facet),
-                        "sentence_boundary": SENTENCE_BOUNDARY,
-                        "heading": r"^\s*(?:\d+(?:\.\d+)*\.?|CLÁUSULA\s+[A-ZÀ-Ú0-9]+)\s*[-–—:]?\s*",
-                        "uncertain": UNCERTAIN_STATEMENT,
-                        "answer_pattern": answer_pattern(facet),
+                        "search": search_terms(query_terms(facet)),
                         "topic": body.topic_id,
                         "versions": versions,
                         "area": body.filters.area,
@@ -230,14 +191,28 @@ def answer(body: QuestionRequest) -> QuestionResponse:
                 .mappings()
                 .all()
             )
-            related_ids, supported_ids = set(), set()
-            for row in rows:
-                citation = verified_citation(row)
-                if citation:
-                    citations[citation.passage_id] = citation
-                    related_ids.add(citation.passage_id)
-                    if row["complete"]:
-                        supported_ids.add(citation.passage_id)
+            verified = [c for row in rows if (c := verified_citation(row))]
+            candidates = [
+                {"passage_id": str(c.passage_id), "assertion": assertion}
+                for c in verified
+                for assertion in support_assertions(c.excerpt, facet, c.title)
+            ]
+            supported_ids = set(
+                connection.execute(
+                    text("""
+                SELECT DISTINCT passage_id::uuid FROM jsonb_to_recordset(CAST(:candidates AS jsonb))
+                    AS candidate(passage_id text, assertion text)
+                WHERE to_tsvector('portuguese', assertion) @@ plainto_tsquery('portuguese', :question)
+            """),
+                    {"candidates": json.dumps(candidates), "question": query_terms(facet)},
+                ).scalars()
+            )
+            verified.sort(key=lambda c: c.passage_id not in supported_ids)
+            selected = verified[:8]
+            related_ids = {c.passage_id for c in selected}
+            supported_ids &= related_ids
+            for citation in selected:
+                citations[citation.passage_id] = citation
             if related_ids:
                 coverage.append(supported_ids or related_ids)
             if supported_ids:

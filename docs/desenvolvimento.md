@@ -192,19 +192,25 @@ O filtro de área exige a presença textual da área no trecho; as perspectivas 
 vocabulário de prazos, valores, obrigações ou riscos. Não há inferência de área ou responsável.
 
 As perguntas são separadas em pontos por `?`, `;`, quebra de linha ou ` e `, com até 12 pontos.
-A classificação `supported` exige os termos relevantes de cada ponto juntos em uma mesma
-frase, sem encaminhamento para consulta externa ou declaração de informação ausente. Perguntas
-sobre prazo ou valor exigem uma atribuição quantitativa direta e simples: sujeito, prazo com
-unidade/data ou valor monetário/percentual, com modificadores básicos como dias úteis ou corridos.
-Os lexemas do sujeito devem corresponder aos da pergunta; não basta haver termos e um número
-na mesma frase. Comparações e atribuições a outra ação permanecem parciais, inclusive “o prazo
-para cancelar férias difere dos 45 dias exigidos para solicitar férias”. Condições ou construções
-fora desse formato conservador também mantêm a lacuna, preservando o trecho para conferência.
-Uma pergunta genérica sobre prazo de Férias pode retornar parcial quando o trecho trata
-especificamente de solicitação; especificar a ação permite confirmar a atribuição direta. `partial` indica trechos relacionados com pontos
-sem confirmação completa; `insufficient` indica ausência de trechos verificáveis. As lacunas identificam o ponto
-sem confirmação e não são preenchidas pelo modelo. A classificação é textual, conservadora e
-não constitui validação semântica de uma interpretação. Não há detecção de divergências nesta issue.
+A classificação `supported` exige evidência para cada ponto da pergunta. A recuperação usa
+expansões de vocabulário; a confirmação usa separadamente a ação e a medida da mesma afirmação.
+Pedir, solicitar e solicitação compartilham uma ação, e prazo e antecedência compartilham um
+marcador temporal. O título da versão fornece o contexto documental (por exemplo, Férias),
+sem substituir a evidência da ação e do número no item. O texto literal apresentado não muda.
+
+Para prazo ou valor, a medida precisa seguir um marcador da mesma ação. Comparações,
+encaminhamentos e frases que misturam ações diferentes continuam parciais: os 45 dias de
+solicitação não confirmam o prazo de cancelamento. Qualificadores e condições após a medida
+são preservados, como “antecedência mínima de 45 dias corridos do início de gozo” no item 4.3.1
+original. As quebras de linha da extração não interrompem a afirmação. A classificação não
+exige igualdade literal entre o sujeito da frase e a pergunta.
+
+São recuperados até 48 candidatos por ponto e priorizados até oito trechos verificáveis,
+com evidências confirmadas antes das apenas relacionadas. `partial` indica pontos sem
+confirmação completa; `insufficient` indica ausência de trechos verificáveis. As lacunas não
+são preenchidas pelo modelo. O reconhecimento é local e limitado ao vocabulário e às relações
+tratadas pelo extrator; não equivale a uma análise semântica irrestrita. Não há detecção de
+divergências nesta issue.
 
 Só versões `ready` do tema entram na busca. Datas explícitas limitam a elegibilidade; a data de
 referência informada no campo tem prioridade. Uma única data `DD/MM/AAAA` ou `AAAA-MM-DD` na
@@ -213,8 +219,9 @@ em `America/Recife`. Uma versão futura pode ser consultada escolhendo sua data 
 A sucessão considera `superseded_by` ou declaração inequívoca `Substitui a v2` / `Substitui a versão
 2.0.0` / `Substitui a NG_111 versão 2.0.0` na primeira página do mesmo documento, com início
 confirmado da sucessora. Quando a declaração inclui um código, ele precisa corresponder ao
-documento substituído. Declarações com negação na mesma frase (inclusive antes ou depois de
-“substitui”, ou separada por quebra de linha) não estabelecem sucessão. A fase “Versão anterior”
+documento substituído. Uma negação que governa a substituição (inclusive “não\nsubstitui”) ou
+rejeita a própria afirmação não estabelece sucessão. Negar outra ação, como “sem alterar os
+procedimentos” depois da versão citada, preserva a sucessão afirmativa. A fase “Versão anterior”
 continua elegível antes do início da sucessora. Não se presume
 substituição por ordem de upload ou maior número da edição. Fases anteriores com aplicabilidade
 incerta são excluídas; sem datas em uma fonte corrente, a interface mostra a ausência do intervalo.

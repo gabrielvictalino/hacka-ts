@@ -40,8 +40,8 @@ def ask(reader, topic, question, **kwargs):
 @pytest.mark.parametrize(
     ("question", "literal", "status"),
     [
-        ("Qual o prazo de férias?", "1. Férias: prazo de solicitação de 30 dias corridos para GGC.", "partial"),
-        ("Qual o prazo de inovação?", "2. Inovação: prazo de inscrição de 15 dias úteis para GGC.", "partial"),
+        ("Qual o prazo de férias?", "1. Férias: prazo de solicitação de 30 dias corridos para GGC.", "supported"),
+        ("Qual o prazo de inovação?", "2. Inovação: prazo de inscrição de 15 dias úteis para GGC.", "supported"),
         (
             "Qual o valor de locação?",
             "CLÁUSULA PRIMEIRA - Locação: valor de R$ 2.000,00 por mês para GGC.",
@@ -485,3 +485,67 @@ def test_value_of_another_action_does_not_confirm_requested_value(reader, topic)
     ingest(topic, ["O valor de cancelamento de locação difere dos R$ 500,00 exigidos para renovar locação."])
     result = ask(reader, topic, "Qual o valor de cancelamento de locação?")
     assert result["status"] == "partial" and result["gaps"]
+
+
+# NG_111 v3.0.0, página física 2, item 4.3.1, extraído do acervo local.
+COLLECTION_ITEM_431 = (
+    "4.3.1. A solicitação é formal e feita no Portal Raiz (FM_1111-001) com antecedência\n"
+    "mínima de 45 dias corridos do início de gozo."
+)
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Em 12/11/2026, com quantos dias de antecedência devo pedir férias?",
+        "Qual o prazo para solicitar férias?",
+        "Qual a antecedência mínima para solicitação de férias?",
+    ],
+)
+def test_ac01_original_item_confirms_its_explicit_deadline(reader, topic, question):
+    version, _ = ingest(
+        topic,
+        [
+            "Título: Férias\nSigla e Número: NG_111\nVersão: 3.0.0\nFase: Vigente\nVigência: 03/08/2026 a 03/02/2028",
+            COLLECTION_ITEM_431,
+        ],
+    )
+    result = ask(reader, topic, question, reference_date="2026-11-12")
+    assert result["status"] == "supported" and not result["gaps"]
+    citation = result["claims"][0]["citations"][0]
+    assert citation["version_id"] == str(version)
+    assert citation["physical_page"] == 2 and citation["section"] == "4.3.1"
+    assert citation["excerpt"] == COLLECTION_ITEM_431
+    unrelated = ask(reader, topic, "Qual o prazo para cancelar férias?", reference_date="2026-11-12")
+    assert unrelated["status"] == "partial" and unrelated["gaps"]
+
+
+@pytest.mark.parametrize(
+    "declaration",
+    [
+        "Esta norma substitui a NG_111 versão 2.0.0, sem alterar os procedimentos de solicitação.",
+        "Esta norma não altera os procedimentos de solicitação, mas substitui a NG_111 versão 2.0.0.",
+        "Esta norma substitui a NG_111 versão 2.0.0 e não modifica os procedimentos de solicitação.",
+    ],
+)
+def test_negation_of_another_action_does_not_cancel_succession(reader, topic, declaration):
+    old, content = ingest(
+        topic,
+        [
+            "Título: Férias\nSigla e Número: NG_111\nVersão: 2.0.0\nFase: Vigente\nVigência: 01/01/2025 a 31/12/2027",
+            "Férias: prazo de 30 dias.",
+        ],
+    )
+    old_source = ask(reader, topic, "Prazo de férias", reference_date="2026-07-10")["passages"][0]
+    new, _ = ingest(
+        topic,
+        [
+            "Título: Férias\nSigla e Número: NG_111\nVersão: 3.0.0\nFase: Vigente\n"
+            f"Vigência: 03/08/2026 a 31/12/2028\n{declaration}",
+            "Férias: prazo de 45 dias.",
+        ],
+    )
+    current = ask(reader, topic, "Prazo de férias", reference_date="2026-11-12")
+    assert {c["version_id"] for c in current["passages"]} == {str(new)}
+    assert reader.get(f"/api/citations/{old_source['passage_id']}").json() == old_source
+    assert reader.get(f"/api/documents/{old}/file").content == content
