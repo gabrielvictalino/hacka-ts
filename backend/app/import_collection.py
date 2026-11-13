@@ -37,6 +37,8 @@ def main():
                     {"id": uuid4(), "name": topic_name},
                 ).scalar_one()
                 result = enqueue(connection, topic_id, path.name, path.read_bytes())
+            if result.status == "failed":
+                failed = True
             print(
                 json.dumps(
                     {

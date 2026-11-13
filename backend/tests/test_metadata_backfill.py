@@ -261,3 +261,49 @@ def test_reimport_marks_legacy_conflict_without_recreating_sources(topic):
             {"id": conflicting["id"]},
         ).one()
         assert row == (conflicting["page_id"], conflicting["passage_id"], conflicting["text"][:1500])
+
+
+def test_import_cli_returns_failure_for_legacy_conflict_and_continues(topic, tmp_path, monkeypatch, capsys):
+    import json
+    import sys
+
+    from app.import_collection import main
+
+    first = seed_legacy(topic, "3.0.0")
+    conflicting = seed_legacy(topic, "3.0.0", suffix="Conteúdo conflitante para testar o CLI.")
+    with get_engine().begin() as connection:
+        enqueue(connection, topic, "first.pdf", first["content"])
+    directory = tmp_path / f"test-{topic}"
+    directory.mkdir()
+    (directory / "01-valid.pdf").write_bytes(make_pdf(["Documento válido antes do conflito."]))
+    (directory / "02-conflict.pdf").write_bytes(conflicting["content"])
+    (directory / "03-valid.pdf").write_bytes(make_pdf(["Documento válido depois do conflito."]))
+    monkeypatch.setattr(sys, "argv", ["import_collection", str(tmp_path)])
+    for duplicate in (False, True):
+        with pytest.raises(SystemExit) as result:
+            main()
+        assert result.value.code == 1
+        records = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+        assert [record["file"] for record in records] == [
+            f"test-{topic}/01-valid.pdf",
+            f"test-{topic}/02-conflict.pdf",
+            f"test-{topic}/03-valid.pdf",
+        ]
+        assert [record["status"] for record in records] == ["queued", "failed", "queued"]
+        assert records[0]["duplicate"] is duplicate and records[2]["duplicate"] is duplicate
+        assert records[1]["version_id"] == str(conflicting["id"]) and records[1]["duplicate"] is True
+        assert str(first["id"]) in records[1]["error"]
+    with get_engine().connect() as connection:
+        assert (
+            connection.execute(
+                text("SELECT count(*) FROM document_versions WHERE topic_id=:topic"), {"topic": topic}
+            ).scalar()
+            == 4
+        )
+        assert set(
+            connection.execute(
+                text("""SELECT s.id FROM passages s JOIN pages p ON p.id=s.page_id
+            JOIN document_versions v ON v.id=p.version_id WHERE v.topic_id=:topic"""),
+                {"topic": topic},
+            ).scalars()
+        ) == {first["passage_id"], conflicting["passage_id"]}
