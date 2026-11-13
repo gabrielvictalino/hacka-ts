@@ -7,6 +7,15 @@ const BASE = process.env.IPBOT_BASE_URL || "http://127.0.0.1:5173";
 const SHOTS = process.env.IPBOT_E2E_SHOTS || "";
 const FILES = process.env.IPBOT_E2E_FILES || path.join(__dirname, "arquivos");
 const ROOT = path.resolve(__dirname, "../../..");
+// Acervo importado: "referencia" (acervo do desafio, não versionado) ou "sintetico" (tests/e2e/acervo_sintetico.py).
+const NG_PAGES = { referencia: 10, sintetico: 4 };
+const ACERVO = process.env.IPBOT_E2E_ACERVO || "referencia";
+// Onde rodar a simulação de conflito legado: "dev-local" (scripts/dev-local.sh) ou "compose" (serviço api).
+const RUNNER = process.env.IPBOT_E2E_RUNNER || "dev-local";
+if (!(ACERVO in NG_PAGES) || !["dev-local", "compose"].includes(RUNNER)) {
+  console.log("IPBOT_E2E_ACERVO deve ser referencia ou sintetico; IPBOT_E2E_RUNNER, dev-local ou compose");
+  process.exit(2);
+}
 const results = [];
 function check(name, ok, detail = "") {
   results.push(ok);
@@ -89,8 +98,9 @@ async function enter(page, name) {
   check("PDF válido fica pronto pela atualização automática", true);
   const ngCard = management.locator(".managed-version").filter({ hasText: "NG_111 · Férias" }).filter({ hasText: /Versão\s*3\.0\.0/ }).first();
   const ngText = await ngCard.innerText();
-  const ngOk = ["3.0.0", "Norma Geral", "Vigente", "10 de 10 páginas"].every(t => ngText.includes(t));
-  check("Lista mostra versão, tipo, fase e páginas", ngOk, ngOk ? "NG_111 v3.0.0 · Norma Geral · Vigente · 10 de 10 páginas" : ngText.replace(/\s+/g, " "));
+  const pages = `${NG_PAGES[ACERVO]} de ${NG_PAGES[ACERVO]} páginas`;
+  const ngOk = ["3.0.0", "Norma Geral", "Vigente", pages].every(t => ngText.includes(t));
+  check("Lista mostra versão, tipo, fase e páginas", ngOk, ngOk ? `NG_111 v3.0.0 · Norma Geral · Vigente · ${pages}` : ngText.replace(/\s+/g, " "));
   await failedCard.getByRole("button", { name: "Tentar novamente" }).click();
   await management.getByText("Arquivo recolocado na fila de processamento.").waitFor();
   check("Tentar novamente recoloca o arquivo na fila", true);
@@ -188,9 +198,13 @@ async function enter(page, name) {
 
   // (c) Retry com HTTP 202 e status "failed" mostra o erro e não anuncia reenfileiramento.
   const { execFileSync } = require("node:child_process");
-  const run = (arg) => execFileSync(path.join(ROOT, "scripts/dev-local.sh"),
-    ["run", ".venv/bin/python", "tests/e2e/ui/legacy_conflict.py", arg],
-    { cwd: ROOT, env: process.env }).toString().trim();
+  const legacyScript = path.join(__dirname, "legacy_conflict.py");
+  // No Compose, o script vai pela entrada padrão: tests/ não é montado no container da API.
+  const run = (arg) => (RUNNER === "compose"
+    ? execFileSync("docker", ["compose", "exec", "-T", "-e", `IPBOT_E2E_ALLOW_DB=${process.env.IPBOT_E2E_ALLOW_DB || ""}`,
+      "api", "python", "-", arg], { cwd: ROOT, input: require("node:fs").readFileSync(legacyScript) })
+    : execFileSync(path.join(ROOT, "scripts/dev-local.sh"), ["run", ".venv/bin/python", "tests/e2e/ui/legacy_conflict.py", arg],
+      { cwd: ROOT, env: process.env })).toString().trim();
   const conflictId = run("set");
   try {
     await page.getByRole("button", { name: "Gestão do acervo" }).click();

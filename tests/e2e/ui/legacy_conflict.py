@@ -1,6 +1,7 @@
-"""Simula, no banco de testes ipbot_e2e, uma fonte com falha que já tem páginas (como um legado em conflito).
+"""Simula, num banco de testes, uma fonte com falha que já tem páginas (como um legado em conflito).
 
 Uso: scripts/dev-local.sh run .venv/bin/python tests/e2e/ui/legacy_conflict.py set|restore
+ ou: docker compose exec -T -e IPBOT_E2E_ALLOW_DB=<banco> api python - set|restore < tests/e2e/ui/legacy_conflict.py
 Só altera um PDF de teste da interface, nunca o acervo, e só roda com IPBOT_E2E_ALLOW_DB igual a POSTGRES_DB.
 """
 import os

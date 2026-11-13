@@ -1,6 +1,7 @@
 """Roteiro ponta a ponta da #12 pelo proxy do Vite, com as mesmas chamadas do frontend.
 
-Requer acervo sintético importado, fatos publicados e o SSO simulado (AUTH_DEMO_ENABLED=true).
+Requer um acervo importado e o SSO simulado (AUTH_DEMO_ENABLED=true). IPBOT_E2E_ACERVO escolhe qual:
+`referencia` (padrão; acervo do desafio, não versionado) ou `sintetico` (tests/e2e/acervo_sintetico.py, usado na CI).
 Endereço: IPBOT_BASE_URL (padrão http://127.0.0.1:5173).
 Não imprime cookies, tokens nem segredos. Saída: uma linha por verificação.
 """
@@ -14,6 +15,11 @@ from pypdf import PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
 BASE = os.environ.get("IPBOT_BASE_URL", "http://127.0.0.1:5173")
+# Versões do acervo de Férias esperadas em cada acervo.
+FERIAS_VERSIONS = {"referencia": 7, "sintetico": 2}
+ACERVO = os.environ.get("IPBOT_E2E_ACERVO", "referencia")
+if ACERVO not in FERIAS_VERSIONS:
+    sys.exit(f"IPBOT_E2E_ACERVO deve ser {' ou '.join(FERIAS_VERSIONS)}")
 results = []
 
 
@@ -72,7 +78,9 @@ for _ in range(60):
 # Só as versões do acervo têm código no cabeçalho; os PDFs de teste enviados antes ficam de fora da contagem.
 acervo = [v for v in versions if v["code"]]
 ready = [v for v in acervo if v["status"] == "ready"]
-check("Versões do acervo de Férias processadas", len(ready) == len(acervo) == 7, f"{len(ready)}/{len(acervo)} prontas")
+expected = FERIAS_VERSIONS[ACERVO]
+check("Versões do acervo de Férias processadas", len(ready) == len(acervo) == expected,
+      f"{len(ready)}/{len(acervo)} prontas, esperadas {expected} ({ACERVO})")
 ng = next(v for v in versions if v["code"] == "NG_111" and v["version"] == "3.0.0")
 check("Lista traz código, versão, tipo, fase e páginas", bool(ng["document_type"] and ng["declared_phase"] and ng["page_count"]),
       f"{ng['code']} v{ng['version']} · {ng['document_type']} · {ng['declared_phase']} · {ng['processed_pages']}/{ng['page_count']}")

@@ -1,7 +1,7 @@
 """Gera os PDFs do teste de interface com identificador único (evita reaproveitar duplicados)."""
-from io import BytesIO
 import os
 import sys
+from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 
