@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import type { components } from "../../packages/contracts";
 import "./style.css";
 import { QuestionPanel } from "./QuestionPanel";
+import { ValidityPanel } from "./ValidityPanel";
 
 type Identity = components["schemas"]["Identity"];
 type DemoAssertion = components["schemas"]["DemoAssertion"];
@@ -96,6 +97,7 @@ function App() {
       <p>Esta conta tem acesso às operações de upload e aos detalhes dos alertas.</p>
     </section>}
     {identity && <QuestionPanel key={identity.subject} topics={topics} />}
+    {identity && <ValidityPanel key={`validity-${identity.subject}`} topics={topics} />}
     {identity && <section aria-labelledby="topics-title"><h2 id="topics-title">Temas do acervo</h2>
       {topics.length ? <ul>{topics.map(topic => <li key={topic.id}>{topic.name}</li>)}</ul>
         : <p>Nenhum tema importado. Importe o acervo para começar.</p>}

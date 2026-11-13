@@ -239,7 +239,7 @@ procedimentos” depois da versão citada, preserva a sucessão afirmativa. A fa
 continua elegível antes do início da sucessora. Não se presume
 substituição por ordem de upload ou maior número da edição. Fases anteriores com aplicabilidade
 incerta são excluídas; sem datas em uma fonte corrente, a interface mostra a ausência do intervalo.
-Regras temporais mais amplas seguem no cartão de vigência.
+A mesma classificação alimenta a tela de vigência (#13), descrita abaixo.
 
 Cada citação contém documento, ID imutável da versão, ID do trecho, título, versão declarada,
 página física (começando em 1), item/cláusula quando identificado e trecho literal conferido
@@ -274,3 +274,30 @@ Os testes de consulta usam PDFs sintéticos para Férias, Inovação e Locação
 Cobrem filtros, respostas parciais, ausência de evidência, data histórica, sucessão, literalidade,
 página física após página vazia, autenticação e continuação por contingência. O Bedrock é simulado
 nos testes; nenhuma credencial ou chamada AWS real é necessária.
+
+## Vigência, camadas e mudanças de versão · issue #13
+
+`GET /api/vigencia?topic_id=…&reference_date=AAAA-MM-DD` (alias `GET /vigencia`) mostra, para cada documento do tema, a situação de cada edição publicada na data de referência. Sem data, usa o dia em `America/Recife`. Qualquer perfil autenticado pode consultar; tema inexistente retorna 404. A Consulta exibe o painel **Vigência, camadas e versões**, com tema e data de referência.
+
+A resposta separa três informações e não deriva uma da outra:
+
+- **Fase declarada** (`declared_phase`): o rótulo impresso, como “Vigente” ou “Versão anterior”. Ele não prova aplicação em uma data.
+- **Datas de vigência** (`valid_from`/`valid_until`): o intervalo do cabeçalho. Datas de aprovação ou assinatura não contam como início.
+- **Substituição** (`superseded_by`/`supersedes`): sucessão declarada pela própria sucessora, com a citação do trecho que a declara. `in_effect` indica se a sucessora já começou.
+
+`status` combina essas informações na data de referência com a mesma regra da consulta (`app/vigencia/situacao.py`), e `applicable` indica se a edição entra nas respostas:
+
+| `status` | Significado |
+| --- | --- |
+| `em_vigor` | Dentro do intervalo documentado e sem sucessora em vigor. |
+| `fase_declarada` | Sem datas no cabeçalho; usada porque nenhuma sucessora declarada está em vigor. A tela mostra “datas não informadas”. |
+| `a_iniciar` | O intervalo documentado começa depois da data. Não é orientação vigente, mesmo com fase “Vigente”. |
+| `encerrada` | O intervalo documentado terminou. |
+| `substituida` | Uma sucessora declarada já começou. |
+| `sem_confirmacao` | Fase de versão anterior sem início ou sucessão com data confirmada. |
+
+Cada edição traz `explanation` e `header_citation`, o cabeçalho com fase e vigência impressas. Nenhuma versão é escondida: as anteriores continuam na lista, com suas citações e o PDF original. O documento traz `current_version_ids` (o selo “Em vigor, versão X”) e `notice`, um aviso curto de substituição feita, prevista ou de vigência a iniciar. No acervo de referência, em 13/11/2026, o `CTR_2026-012` aparece “A iniciar em 30/11/2026” e não é usado nas respostas; com data a partir de 30/11/2026, passa a `em_vigor`. Em 10/07/2026, a `NG_111 v2.0.0` aparece em vigor e a v3 como substituição prevista para 03/08/2026.
+
+A camada (`document_layer`) vem do prefixo do código, e `links` lista os vínculos declarados no cabeçalho (`Vinculado a` e `Referência`). `document_id` fica nulo quando o documento vinculado não consta do tema. `precedence` lista declarações como “Em divergência, prevalece a NG_111” encontradas nos trechos do próprio documento, com a citação. Frases negadas são ignoradas. `applicable` indica se a edição que declara a precedência é aplicável na data; a tela só mostra as aplicáveis. Não se presume precedência sem declaração documental.
+
+`changes` lista as mudanças entre edições do mesmo documento revisadas em `app/vigencia/catalogo.py`: 30 para 45 dias na `NG_111` (v2 → v3) e no `FM_1111-001` (v1 → v2), e 3 para 2 ideias no `RG_1100` (v1 → v2). Cada trecho é localizado na edição exata publicada, como na curadoria de fatos. Uma mudança com alguma fonte não encontrada não é exibida. O PDF da `RG_1100 v1.0.0` não está no acervo; por isso `previous_available` é falso e o valor anterior é citado pelo histórico da v2. `kind=version_change` identifica uma mudança de versão, que não é divergência entre fontes aplicáveis. As divergências seguem na #15.

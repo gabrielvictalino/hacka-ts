@@ -1050,6 +1050,170 @@
         }
       }
     },
+    "/api/vigencia": {
+      "get": {
+        "tags": [
+          "validity"
+        ],
+        "summary": "Validity",
+        "description": "Situação temporal, camada, vínculos, precedência declarada e mudanças entre versões do tema, com as fontes de cada informação.",
+        "operationId": "validity_api_vigencia_get",
+        "parameters": [
+          {
+            "name": "topic_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "ID do tema",
+              "title": "Topic Id"
+            },
+            "description": "ID do tema"
+          },
+          {
+            "name": "reference_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Padrão: hoje em America/Recife",
+              "title": "Reference Date"
+            },
+            "description": "Padrão: hoje em America/Recife"
+          },
+          {
+            "name": "ipbot_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ipbot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopicValidity"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Tema não encontrado"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/vigencia": {
+      "get": {
+        "tags": [
+          "validity"
+        ],
+        "summary": "Validity",
+        "operationId": "validity_vigencia_get",
+        "parameters": [
+          {
+            "name": "topic_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "ID do tema",
+              "title": "Topic Id"
+            },
+            "description": "ID do tema"
+          },
+          {
+            "name": "reference_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Padrão: hoje em America/Recife",
+              "title": "Reference Date"
+            },
+            "description": "Padrão: hoje em America/Recife"
+          },
+          {
+            "name": "ipbot_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ipbot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopicValidity"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health/live": {
       "get": {
         "tags": [
@@ -2350,6 +2514,135 @@
         ],
         "title": "Divergence"
       },
+      "DocumentLink": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id",
+            "description": "Documento do mesmo tema; nulo quando não consta do acervo"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code",
+          "document_id"
+        ],
+        "title": "DocumentLink"
+      },
+      "DocumentValidity": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "document_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Type"
+          },
+          "document_layer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Layer"
+          },
+          "current_version_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Current Version Ids"
+          },
+          "notice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notice"
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentLink"
+            },
+            "type": "array",
+            "title": "Links"
+          },
+          "precedence": {
+            "items": {
+              "$ref": "#/components/schemas/PrecedenceDeclaration"
+            },
+            "type": "array",
+            "title": "Precedence"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/VersionValidity"
+            },
+            "type": "array",
+            "title": "Versions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "document_id",
+          "code",
+          "title",
+          "document_type",
+          "document_layer",
+          "current_version_ids",
+          "notice",
+          "links",
+          "precedence",
+          "versions"
+        ],
+        "title": "DocumentValidity"
+      },
       "DocumentVersion": {
         "properties": {
           "id": {
@@ -2632,6 +2925,43 @@
         ],
         "title": "Perspective"
       },
+      "PrecedenceDeclaration": {
+        "properties": {
+          "prevailing_code": {
+            "type": "string",
+            "title": "Prevailing Code"
+          },
+          "prevailing_document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prevailing Document Id"
+          },
+          "applicable": {
+            "type": "boolean",
+            "title": "Applicable",
+            "description": "A edição que declara a precedência é aplicável na data de referência"
+          },
+          "citation": {
+            "$ref": "#/components/schemas/Citation"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "prevailing_code",
+          "prevailing_document_id",
+          "applicable",
+          "citation"
+        ],
+        "title": "PrecedenceDeclaration"
+      },
       "QuestionFilters": {
         "properties": {
           "area": {
@@ -2895,6 +3225,66 @@
         "title": "RuleStep",
         "description": "Um resultado calculado em código, com a demonstração e as fontes dos parâmetros usados."
       },
+      "Succession": {
+        "properties": {
+          "version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Version Id",
+            "description": "A outra edição da relação"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "valid_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid From"
+          },
+          "in_effect": {
+            "type": "boolean",
+            "title": "In Effect",
+            "description": "A sucessora já começou na data de referência"
+          },
+          "citation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Citation"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Trecho da sucessora que declara a substituição"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version_id",
+          "version",
+          "valid_from",
+          "in_effect",
+          "citation"
+        ],
+        "title": "Succession",
+        "description": "Sucessão declarada pela edição sucessora; a anterior continua consultável como fonte histórica."
+      },
       "TeamAbsenceRequest": {
         "properties": {
           "team_size": {
@@ -2947,6 +3337,43 @@
           "name"
         ],
         "title": "TopicRequest"
+      },
+      "TopicValidity": {
+        "properties": {
+          "topic_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Topic Id"
+          },
+          "reference_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Reference Date"
+          },
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentValidity"
+            },
+            "type": "array",
+            "title": "Documents"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/VersionChange"
+            },
+            "type": "array",
+            "title": "Changes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "topic_id",
+          "reference_date",
+          "documents",
+          "changes"
+        ],
+        "title": "TopicValidity"
       },
       "UnjustifiedAbsencesRequest": {
         "properties": {
@@ -3089,6 +3516,255 @@
           "type"
         ],
         "title": "ValidationIssue"
+      },
+      "VersionChange": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "kind": {
+            "type": "string",
+            "const": "version_change",
+            "title": "Kind",
+            "default": "version_change"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "attribute": {
+            "type": "string",
+            "title": "Attribute"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "from_version": {
+            "type": "string",
+            "title": "From Version"
+          },
+          "to_version": {
+            "type": "string",
+            "title": "To Version"
+          },
+          "from_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Version Id"
+          },
+          "to_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Version Id"
+          },
+          "before_text": {
+            "type": "string",
+            "title": "Before Text"
+          },
+          "after_text": {
+            "type": "string",
+            "title": "After Text"
+          },
+          "previous_available": {
+            "type": "boolean",
+            "title": "Previous Available",
+            "description": "O PDF da edição anterior consta do tema"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "before_citations": {
+            "items": {
+              "$ref": "#/components/schemas/Citation"
+            },
+            "type": "array",
+            "title": "Before Citations"
+          },
+          "after_citations": {
+            "items": {
+              "$ref": "#/components/schemas/Citation"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "After Citations"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "key",
+          "code",
+          "attribute",
+          "summary",
+          "from_version",
+          "to_version",
+          "from_version_id",
+          "to_version_id",
+          "before_text",
+          "after_text",
+          "previous_available",
+          "note",
+          "before_citations",
+          "after_citations"
+        ],
+        "title": "VersionChange",
+        "description": "Mudança curada entre edições do mesmo documento; não é divergência entre fontes aplicáveis."
+      },
+      "VersionValidity": {
+        "properties": {
+          "version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Version Id"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "declared_phase": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared Phase",
+            "description": "Rótulo impresso; não prova aplicação em uma data"
+          },
+          "valid_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid From"
+          },
+          "valid_until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid Until"
+          },
+          "linked_codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Linked Codes"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "em_vigor",
+              "fase_declarada",
+              "a_iniciar",
+              "encerrada",
+              "substituida",
+              "sem_confirmacao"
+            ],
+            "title": "Status",
+            "description": "Situação na data de referência: em_vigor (intervalo documentado), fase_declarada (sem datas), a_iniciar, encerrada, substituida ou sem_confirmacao"
+          },
+          "applicable": {
+            "type": "boolean",
+            "title": "Applicable",
+            "description": "Elegível para respostas na data de referência"
+          },
+          "explanation": {
+            "type": "string",
+            "title": "Explanation"
+          },
+          "superseded_by": {
+            "items": {
+              "$ref": "#/components/schemas/Succession"
+            },
+            "type": "array",
+            "title": "Superseded By"
+          },
+          "supersedes": {
+            "items": {
+              "$ref": "#/components/schemas/Succession"
+            },
+            "type": "array",
+            "title": "Supersedes"
+          },
+          "header_citation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Citation"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Cabeçalho com fase e vigência impressas"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version_id",
+          "version",
+          "title",
+          "declared_phase",
+          "valid_from",
+          "valid_until",
+          "linked_codes",
+          "status",
+          "applicable",
+          "explanation",
+          "superseded_by",
+          "supersedes",
+          "header_citation"
+        ],
+        "title": "VersionValidity"
       }
     }
   }

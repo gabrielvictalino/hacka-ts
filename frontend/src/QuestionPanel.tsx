@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { components } from "../../packages/contracts";
+import { EvidencePanel } from "./Evidence";
 
 type Topic = components["schemas"]["Topic"];
 type Result = components["schemas"]["QuestionResponse"];
@@ -79,16 +80,8 @@ export function QuestionPanel({ topics }: { topics: Topic[] }) {
         </button></li>)}</ul>
       </details>}
       {result.gaps.length > 0 && <><h3>Pontos sem confirmação</h3><ul>{result.gaps.map(gap => <li key={gap}>{gap}</li>)}</ul></>}
-      {evidence && <aside ref={evidencePanel} tabIndex={-1} className="evidence" aria-label="Evidência selecionada">
-        <h3>{evidence.title}</h3>
-        <p>{evidence.code} · {evidence.version || "Versão não identificada"} · Página física {evidence.physical_page} · {evidence.section || "Item ou cláusula não identificado"}</p>
-        <p>{evidence.document_type} · {evidence.document_layer} · {evidence.declared_phase || "Fase não declarada"}</p>
-        <p>Vigência publicada: {evidence.valid_from || "início não identificado"} a {evidence.valid_until || "fim não identificado"}.</p>
-        <blockquote>{evidence.excerpt}</blockquote>
-        <p><a href={`/api/documents/${evidence.version_id}/file#page=${evidence.physical_page}`} target="_blank" rel="noreferrer">Abrir PDF nesta página</a></p>
-        <small>ID da versão: {evidence.version_id}</small>
-        <button onClick={() => { setEvidence(null); resultHeading.current?.focus(); }}>Voltar à resposta</button>
-      </aside>}
+      {evidence && <EvidencePanel ref={evidencePanel} evidence={evidence} closeLabel="Voltar à resposta"
+        onClose={() => { setEvidence(null); resultHeading.current?.focus(); }} />}
     </div>}
   </section>;
 }
