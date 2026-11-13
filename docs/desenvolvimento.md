@@ -166,9 +166,14 @@ vocabulário de prazos, valores, obrigações ou riscos. Não há inferência de
 As perguntas são separadas em pontos por `?`, `;`, quebra de linha ou ` e `, com até 12 pontos.
 A classificação `supported` exige os termos relevantes de cada ponto juntos em uma mesma
 frase, sem encaminhamento para consulta externa ou declaração de informação ausente. Perguntas
-sobre prazo exigem número com unidade temporal ou data explícita; perguntas sobre valor exigem
-valor monetário ou percentual explícito. Isso evita combinar o prazo de uma ação com o mero
-encaminhamento de outra dentro do mesmo trecho. `partial` indica trechos relacionados com pontos
+sobre prazo ou valor exigem uma atribuição quantitativa direta e simples: sujeito, prazo com
+unidade/data ou valor monetário/percentual, com modificadores básicos como dias úteis ou corridos.
+Os lexemas do sujeito devem corresponder aos da pergunta; não basta haver termos e um número
+na mesma frase. Comparações e atribuições a outra ação permanecem parciais, inclusive “o prazo
+para cancelar férias difere dos 45 dias exigidos para solicitar férias”. Condições ou construções
+fora desse formato conservador também mantêm a lacuna, preservando o trecho para conferência.
+Uma pergunta genérica sobre prazo de Férias pode retornar parcial quando o trecho trata
+especificamente de solicitação; especificar a ação permite confirmar a atribuição direta. `partial` indica trechos relacionados com pontos
 sem confirmação completa; `insufficient` indica ausência de trechos verificáveis. As lacunas identificam o ponto
 sem confirmação e não são preenchidas pelo modelo. A classificação é textual, conservadora e
 não constitui validação semântica de uma interpretação. Não há detecção de divergências nesta issue.
@@ -180,7 +185,9 @@ em `America/Recife`. Uma versão futura pode ser consultada escolhendo sua data 
 A sucessão considera `superseded_by` ou declaração inequívoca `Substitui a v2` / `Substitui a versão
 2.0.0` / `Substitui a NG_111 versão 2.0.0` na primeira página do mesmo documento, com início
 confirmado da sucessora. Quando a declaração inclui um código, ele precisa corresponder ao
-documento substituído. A fase “Versão anterior” continua elegível antes do início da sucessora. Não se presume
+documento substituído. Declarações com negação na mesma frase (inclusive antes ou depois de
+“substitui”, ou separada por quebra de linha) não estabelecem sucessão. A fase “Versão anterior”
+continua elegível antes do início da sucessora. Não se presume
 substituição por ordem de upload ou maior número da edição. Fases anteriores com aplicabilidade
 incerta são excluídas; sem datas em uma fonte corrente, a interface mostra a ausência do intervalo.
 Regras temporais mais amplas seguem no cartão de vigência.

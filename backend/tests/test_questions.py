@@ -38,17 +38,21 @@ def ask(reader, topic, question, **kwargs):
 
 
 @pytest.mark.parametrize(
-    ("question", "literal"),
+    ("question", "literal", "status"),
     [
-        ("Qual o prazo de férias?", "1. Férias: prazo de solicitação de 30 dias corridos para GGC."),
-        ("Qual o prazo de inovação?", "2. Inovação: prazo de inscrição de 15 dias úteis para GGC."),
-        ("Qual o valor de locação?", "CLÁUSULA PRIMEIRA - Locação: valor de R$ 2.000,00 por mês para GGC."),
+        ("Qual o prazo de férias?", "1. Férias: prazo de solicitação de 30 dias corridos para GGC.", "partial"),
+        ("Qual o prazo de inovação?", "2. Inovação: prazo de inscrição de 15 dias úteis para GGC.", "partial"),
+        (
+            "Qual o valor de locação?",
+            "CLÁUSULA PRIMEIRA - Locação: valor de R$ 2.000,00 por mês para GGC.",
+            "supported",
+        ),
     ],
 )
-def test_topics_literal_physical_page_and_stable_evidence(reader, topic, question, literal):
+def test_topics_literal_physical_page_and_stable_evidence(reader, topic, question, literal, status):
     version, content = ingest(topic, ["", literal])
     result = ask(reader, topic, question)
-    assert result["mode"] == "extractive" and result["status"] == "supported"
+    assert result["mode"] == "extractive" and result["status"] == status
     citation = result["passages"][0]
     assert citation["physical_page"] == 2 and citation["excerpt"] == literal
     assert citation["version_id"] == str(version)
@@ -405,3 +409,79 @@ def test_model_cannot_replace_support_with_merely_related_passage(reader, topic,
     result = ask(reader, topic, "Qual o prazo de férias?")
     assert result["mode"] == "extractive" and result["notice"]
     assert result["claims"] == baseline["claims"]
+
+
+@pytest.mark.parametrize(
+    "literal",
+    [
+        "O prazo para cancelar férias difere dos 45 dias exigidos para solicitar férias.",
+        "O prazo para cancelar férias difere de 45 dias.",
+        "O prazo para cancelar férias é diferente de 45 dias.",
+        "O prazo para cancelar férias não é de 45 dias.",
+        "O prazo para cancelar férias será informado após os 45 dias para solicitar férias.",
+        "O prazo para cancelar férias é de 45 dias exigidos para solicitar férias.",
+    ],
+)
+def test_other_action_or_comparison_never_supplies_requested_deadline(reader, topic, literal):
+    ingest(topic, [literal])
+    result = ask(reader, topic, "Qual o prazo para cancelar férias?")
+    assert result["status"] == "partial"
+    assert result["gaps"]
+    assert result["claims"][0]["text"] == literal
+
+
+@pytest.mark.parametrize(
+    "declaration",
+    [
+        "Esta norma não substitui a NG_111 versão 2.0.0.",
+        "Esta norma não\nsubstitui a NG_111 versão 2.0.0.",
+        "Esta norma nunca substitui a NG_111 versão 2.0.0.",
+        "Não se deve afirmar que esta norma substitui a NG_111 versão 2.0.0.",
+        "A afirmação de que esta norma substitui a NG_111 versão 2.0.0 não procede.",
+    ],
+)
+def test_negated_succession_does_not_remove_current_version(reader, topic, declaration):
+    old, content = ingest(
+        topic,
+        [
+            "Título: Férias\nSigla e Número: NG_111\nVersão: 2.0.0\nFase: Vigente\nVigência: 01/01/2025 a 31/12/2027",
+            "Férias: prazo de 30 dias.",
+        ],
+    )
+    old_source = ask(reader, topic, "Prazo de férias", reference_date="2026-07-10")["passages"][0]
+    new, _ = ingest(
+        topic,
+        [
+            "Título: Férias\nSigla e Número: NG_111\nVersão: 3.0.0\nFase: Vigente\n"
+            f"Vigência: 03/08/2026 a 31/12/2028\n{declaration}",
+            "Férias: prazo de 45 dias.",
+        ],
+    )
+    current = ask(reader, topic, "Prazo de férias", reference_date="2026-11-12")
+    assert {c["version_id"] for c in current["passages"]} == {str(old), str(new)}
+    assert reader.get(f"/api/citations/{old_source['passage_id']}").json() == old_source
+    assert reader.get(f"/api/documents/{old}/file").content == content
+
+
+@pytest.mark.parametrize(
+    ("question", "literal"),
+    [
+        ("Qual o prazo de solicitação de férias?", "1. Férias: prazo de solicitação de 30 dias corridos para GGC."),
+        ("Qual o prazo de inscrição de inovação?", "2. Inovação: prazo de inscrição de 15 dias úteis para GGC."),
+        ("Qual o prazo para cancelar férias?", "O prazo para cancelar férias é de 1 mês."),
+        ("Qual o prazo para cancelar férias?", "O prazo para cancelar férias será de 5 dias úteis."),
+        ("Qual o prazo para cancelar férias?", "Prazo para cancelar férias: 10/12/2026."),
+        ("Qual o valor de cancelamento de locação?", "Valor de cancelamento de locação: R$ 500,00."),
+    ],
+)
+def test_direct_quantitative_assignment_matches_requested_subject(reader, topic, question, literal):
+    ingest(topic, [literal])
+    result = ask(reader, topic, question)
+    assert result["status"] == "supported" and not result["gaps"]
+    assert result["claims"][0]["text"] == literal
+
+
+def test_value_of_another_action_does_not_confirm_requested_value(reader, topic):
+    ingest(topic, ["O valor de cancelamento de locação difere dos R$ 500,00 exigidos para renovar locação."])
+    result = ask(reader, topic, "Qual o valor de cancelamento de locação?")
+    assert result["status"] == "partial" and result["gaps"]

@@ -42,15 +42,34 @@ UNCERTAIN_STATEMENT = (
 )
 
 
+NEGATED_SUCCESSION = re.compile(r"\b(não|nunca|jamais|tampouco|nem|sem)\b", re.I)
+
+
+def affirmative_successions(header):
+    # Mantém quebras de linha dentro da frase para reconhecer “não\nsubstitui”.
+    for sentence in re.split(r"(?<=[.!?;])\s+", header):
+        if not NEGATED_SUCCESSION.search(sentence):
+            yield from SUCCESSION.finditer(sentence)
+
+
 def answer_pattern(question):
-    """Prazo e valor precisam estar explícitos, além dos termos de busca."""
+    """Só atribuições quantitativas simples podem confirmar a pergunta localmente."""
     if re.search(r"\b(quem|responsável)\b", question, re.I):
         return ""
-    if re.search(r"prazo|antecedência|quantos?\s+(dias?|horas?|meses?)", question, re.I):
-        return r"\d+\s*(dias?|horas?|semanas?|meses?|anos?)\M|\d{2}/\d{2}/\d{4}|\d{4}-\d{2}-\d{2}"
-    if re.search(r"valor|cust[oa]|preço|quanto", question, re.I):
-        return r"R\$\s*\d|\d+([.,]\d+)?\s*(reais|%|por cento)"
-    return ""
+    if re.search(r"prazo|antecedência|quantos?\s+(dias?|horas?|mês|meses)", question, re.I):
+        value = r"\d+(?:[.,]\d+)?\s*(?:dias?|horas?|semanas?|mês|meses|anos?)|\d{2}/\d{2}/\d{4}|\d{4}-\d{2}-\d{2}"
+    elif re.search(r"valor|cust[oa]|preço|quanto", question, re.I):
+        value = r"R\$\s*\d[\d.,]*|\d+(?:[.,]\d+)?\s*(?:reais|%|por cento)"
+    else:
+        return ""
+    # A captura é o sujeito da atribuição. Seus lexemas devem corresponder exatamente
+    # aos da pergunta; uma comparação ou outra ação não pode fornecer o número.
+    # Condições mais complexas permanecem como trechos relacionados, com lacuna.
+    return (
+        r"^\s*(.*?)\s*(?:[Éé]\s+(?:de\s+)?|[Ss]erá\s+(?:de\s+)?|de\s+|:\s*)?"
+        rf"(?:{value})(?:\s+(?:corridos|úteis))?(?:\s+por\s+(?:mês|ano|dia))?"
+        r"(?:\s+para\s+[A-Z]{2,10})?[.!]?\s*$"
+    )
 
 
 CITATION_COLUMNS = """v.id AS version_id, v.document_id, s.id AS passage_id,
@@ -111,7 +130,7 @@ def eligible_versions(connection, topic_id, reference):
         for successor in ready.values():
             if successor["document_id"] != version["document_id"] or successor["id"] == version["id"]:
                 continue
-            for declaration in SUCCESSION.finditer(successor["header"]):
+            for declaration in affirmative_successions(successor["header"]):
                 code = declaration["code"]
                 if code and code.casefold() != (version["code"] or "").casefold():
                     continue
@@ -169,7 +188,7 @@ def answer(body: QuestionRequest) -> QuestionResponse:
         for facet in facets:
             rows = (
                 connection.execute(
-                    text(f"""
+                    text(rf"""
                 WITH query AS (
                     SELECT plainto_tsquery('portuguese', :question) AS full_query,
                     replace(plainto_tsquery('portuguese', :question)::text, ' & ', ' | ')::tsquery AS broad_query,
@@ -180,7 +199,12 @@ def answer(body: QuestionRequest) -> QuestionResponse:
                         SELECT 1 FROM regexp_split_to_table(s.excerpt, :sentence_boundary) AS assertion(sentence)
                         WHERE to_tsvector('portuguese', sentence) @@ q.full_query
                             AND sentence !~* :uncertain
-                            AND (:answer_pattern = '' OR sentence ~* :answer_pattern)
+                            AND (:answer_pattern = '' OR (
+                                sentence !~* '\m(não|nem|nunca|jamais)\M'
+                                AND tsvector_to_array(to_tsvector('portuguese',
+                                    (regexp_match(regexp_replace(sentence, :heading, '', 'i'), :answer_pattern))[1]
+                                )) = tsvector_to_array(to_tsvector('portuguese', :question))
+                            ))
                     ) AS complete
                 {CITATION_JOINS} CROSS JOIN query q
                 WHERE v.id = ANY(CAST(:versions AS uuid[])) AND v.status='ready'
@@ -194,6 +218,7 @@ def answer(body: QuestionRequest) -> QuestionResponse:
                     {
                         "question": query_terms(facet),
                         "sentence_boundary": SENTENCE_BOUNDARY,
+                        "heading": r"^\s*(?:\d+(?:\.\d+)*\.?|CLÁUSULA\s+[A-ZÀ-Ú0-9]+)\s*[-–—:]?\s*",
                         "uncertain": UNCERTAIN_STATEMENT,
                         "answer_pattern": answer_pattern(facet),
                         "topic": body.topic_id,
