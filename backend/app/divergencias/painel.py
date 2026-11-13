@@ -94,12 +94,20 @@ def _cite_legacy(rows, source: Source):
     frase começa, preservando o ID já publicado.
     """
     page = rows[0]["page_text"]
-    literal = find_quote(page, source.quote)
-    if not literal:
+    # A frase pode se repetir em outros itens; só vale a ocorrência dentro dos limites do item revisado.
+    items = list(SECTION.finditer(page))
+    found = None
+    for index, item in enumerate(items):
+        if item["section"].rstrip(".") != source.item:
+            continue
+        end = items[index + 1].start() if index + 1 < len(items) else len(page)
+        literal = find_quote(page[item.start() : end], source.quote)
+        if literal:
+            found = (item.start() + page[item.start() : end].index(literal), literal)
+            break
+    if found is None:
         return None
-    start = page.index(literal)
-    if _item_before(page, start) != source.item:
-        return None
+    start, literal = found
     cursor = 0
     for row in rows:
         offset = page.find(row["excerpt"], cursor)
@@ -114,12 +122,18 @@ def _cite_legacy(rows, source: Source):
 def _affirms_precedence(context: str, literal: str, code: str) -> bool:
     """A frase curada só vale se declarar a precedência sem negação, como na tela de vigência."""
     quote = " ".join(literal.split())
-    for sentence in re.split(r"(?<=[.!?;])\s+(?=[^”\"'])", " ".join(context.split())):
+    text_ = " ".join(context.split())
+    position = text_.find(quote)
+    while position >= 0:
+        # A rejeição pode vir depois da frase citada, na mesma frase ou na seguinte ("… NG_111. Não procede.").
+        after = text_[position + len(quote) :]
+        if not REJECTED_PROPOSITION.search(re.sub(r"^[\s.;:!?”\"'»)]+", " ", after)):
+            break
+        position = text_.find(quote, position + 1)
+    if position < 0:
+        return False
+    for sentence in re.split(r"(?<=[.!?;])\s+(?=[^”\"'])", text_):
         if quote not in sentence:
-            continue
-        # A rejeição pode vir depois da frase citada, além da pontuação que a fecha.
-        after = sentence[sentence.index(quote) + len(quote) :]
-        if REJECTED_PROPOSITION.search(re.sub(r"^[\s.;:!?”\"'»)]+", " ", after)):
             continue
         for match in PRECEDENCE.finditer(sentence):
             if match["code"].casefold() == code.casefold() and is_affirmative(sentence, match):

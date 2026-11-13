@@ -417,3 +417,24 @@ def test_precedence_rejected_after_the_quote_is_not_presented(client, topic):
     (divergence,) = details(client, topic)["divergences"]
     assert divergence["precedence"] is None
     assert any("Precedência não confirmada" in item for item in divergence["missing_information"])
+
+
+def test_legacy_quote_repeated_in_an_earlier_item_uses_the_reviewed_item(client, topic):
+    repeated = """8.4. Emitir o aviso (até D-35).
+8.4.1. Exemplo. Se a solicitação foi aprovada com menos de 35 dias para o início, a GGC
+emite o aviso no dia seguinte à aprovação.
+8.4.2. Se a solicitação foi aprovada com menos de 35 dias para o início, a GGC
+emite o aviso no dia seguinte à aprovação."""
+    acervo(topic, px_notice=repeated)
+    blocks = legacy_blocks(topic, "PX_1111-001", 3, "8.4.2.")
+    (divergence,) = details(client, topic)["divergences"]
+    assert divergence["status"] == "confirmed"
+    procedure = divergence["guidances"][1]["citation"]
+    assert client.get(f"/api/citations/{procedure['passage_id']}").json()["excerpt"] == blocks[1]
+
+
+def test_precedence_rejected_in_the_next_sentence_is_not_presented(client, topic):
+    acervo(topic, precedence="2.2. Em divergência, prevalece a NG_111. Não procede.")
+    (divergence,) = details(client, topic)["divergences"]
+    assert divergence["precedence"] is None
+    assert any("Precedência não confirmada" in item for item in divergence["missing_information"])
