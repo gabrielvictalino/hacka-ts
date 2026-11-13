@@ -1214,6 +1214,181 @@
         }
       }
     },
+    "/api/divergencias": {
+      "get": {
+        "tags": [
+          "divergences"
+        ],
+        "summary": "Divergences",
+        "description": "Detalhes das divergências curadas manualmente: cenário, condições, passagens, precedência declarada e dados faltantes. Reservado à Gestão do acervo.",
+        "operationId": "divergences_api_divergencias_get",
+        "parameters": [
+          {
+            "name": "topic_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "ID do tema",
+              "title": "Topic Id"
+            },
+            "description": "ID do tema"
+          },
+          {
+            "name": "reference_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Padrão: hoje em America/Recife",
+              "title": "Reference Date"
+            },
+            "description": "Padrão: hoje em America/Recife"
+          },
+          {
+            "name": "ipbot_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ipbot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopicDivergences"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Operação reservada à Gestão"
+          },
+          "404": {
+            "description": "Tema não encontrado"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/divergencias/avisos": {
+      "get": {
+        "tags": [
+          "divergences"
+        ],
+        "summary": "Notices",
+        "description": "Aviso curto da Consulta para as divergências aplicáveis na data, sem os detalhes da Gestão.",
+        "operationId": "notices_api_divergencias_avisos_get",
+        "parameters": [
+          {
+            "name": "topic_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "ID do tema",
+              "title": "Topic Id"
+            },
+            "description": "ID do tema"
+          },
+          {
+            "name": "reference_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Padrão: hoje em America/Recife",
+              "title": "Reference Date"
+            },
+            "description": "Padrão: hoje em America/Recife"
+          },
+          {
+            "name": "ipbot_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ipbot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DivergenceNotice"
+                  },
+                  "title": "Response Notices Api Divergencias Avisos Get"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Tema não encontrado"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health/live": {
       "get": {
         "tags": [
@@ -2518,6 +2693,49 @@
         ],
         "title": "CurationReport"
       },
+      "DeclaredPrecedence": {
+        "properties": {
+          "prevailing_code": {
+            "type": "string",
+            "title": "Prevailing Code"
+          },
+          "prevailing_document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prevailing Document Id",
+            "description": "Nulo quando o documento não consta do tema"
+          },
+          "statement": {
+            "type": "string",
+            "title": "Statement"
+          },
+          "applicable": {
+            "type": "boolean",
+            "title": "Applicable",
+            "description": "A edição que declara a precedência é aplicável na data de referência"
+          },
+          "citation": {
+            "$ref": "#/components/schemas/Citation"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "prevailing_code",
+          "prevailing_document_id",
+          "statement",
+          "applicable",
+          "citation"
+        ],
+        "title": "DeclaredPrecedence"
+      },
       "DemoAssertion": {
         "properties": {
           "token": {
@@ -2585,6 +2803,100 @@
           "citations"
         ],
         "title": "Divergence"
+      },
+      "DivergenceNotice": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "kind": {
+            "type": "string",
+            "const": "source_divergence",
+            "title": "Kind",
+            "default": "source_divergence"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "confirmed",
+              "possible"
+            ],
+            "title": "Status",
+            "description": "possible: falta suporte para confirmar"
+          },
+          "codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Codes",
+            "description": "Documentos envolvidos"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "key",
+          "subject",
+          "status",
+          "codes",
+          "message"
+        ],
+        "title": "DivergenceNotice",
+        "description": "Aviso curto da Consulta; passagens, cenário e precedência ficam com a Gestão do acervo."
+      },
+      "DivergentGuidance": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "title": "Role",
+            "description": "Camada da fonte no cenário, como norma geral ou procedimento vinculado"
+          },
+          "guidance": {
+            "type": "string",
+            "title": "Guidance",
+            "description": "Resumo da curadoria; o texto literal está na citação"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "em_vigor",
+              "fase_declarada",
+              "a_iniciar",
+              "encerrada",
+              "substituida",
+              "sem_confirmacao"
+            ],
+            "title": "Status",
+            "description": "Situação da edição citada na data de referência"
+          },
+          "applicable": {
+            "type": "boolean",
+            "title": "Applicable"
+          },
+          "citation": {
+            "$ref": "#/components/schemas/Citation"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "role",
+          "guidance",
+          "status",
+          "applicable",
+          "citation"
+        ],
+        "title": "DivergentGuidance"
       },
       "DocumentLink": {
         "properties": {
@@ -3235,6 +3547,14 @@
             },
             "type": "array",
             "title": "Divergences"
+          },
+          "divergence_notices": {
+            "items": {
+              "$ref": "#/components/schemas/DivergenceNotice"
+            },
+            "type": "array",
+            "title": "Divergence Notices",
+            "description": "Divergências curadas que envolvem as fontes recuperadas"
           }
         },
         "additionalProperties": false,
@@ -3389,6 +3709,121 @@
         "title": "RuleStep",
         "description": "Um resultado calculado em código, com a demonstração e as fontes dos parâmetros usados."
       },
+      "SourceDivergence": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "kind": {
+            "type": "string",
+            "const": "source_divergence",
+            "title": "Kind",
+            "default": "source_divergence"
+          },
+          "scenario_id": {
+            "type": "string",
+            "title": "Scenario Id"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "scenario": {
+            "type": "string",
+            "title": "Scenario"
+          },
+          "conditions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Conditions"
+          },
+          "consequence": {
+            "type": "string",
+            "title": "Consequence"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "confirmed",
+              "possible",
+              "not_applicable"
+            ],
+            "title": "Status",
+            "description": "confirmed: passagens localizadas e aplicáveis; possible: falta suporte para confirmar; not_applicable: alguma edição não se aplica na data de referência"
+          },
+          "status_explanation": {
+            "type": "string",
+            "title": "Status Explanation"
+          },
+          "missing_information": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Information"
+          },
+          "guidances": {
+            "items": {
+              "$ref": "#/components/schemas/DivergentGuidance"
+            },
+            "type": "array",
+            "title": "Guidances"
+          },
+          "precedence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DeclaredPrecedence"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Nula quando a declaração não foi localizada"
+          },
+          "curation": {
+            "type": "string",
+            "const": "manual",
+            "title": "Curation",
+            "default": "manual"
+          },
+          "curated_by": {
+            "type": "string",
+            "title": "Curated By"
+          },
+          "reviewed_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Reviewed On"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "key",
+          "scenario_id",
+          "subject",
+          "question",
+          "scenario",
+          "conditions",
+          "consequence",
+          "status",
+          "status_explanation",
+          "missing_information",
+          "guidances",
+          "precedence",
+          "curated_by",
+          "reviewed_on"
+        ],
+        "title": "SourceDivergence",
+        "description": "Divergência entre fontes aplicáveis ao mesmo cenário; não é mudança histórica entre versões."
+      },
       "Succession": {
         "properties": {
           "version_id": {
@@ -3506,6 +3941,40 @@
           "name"
         ],
         "title": "Topic"
+      },
+      "TopicDivergences": {
+        "properties": {
+          "topic_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Topic Id"
+          },
+          "reference_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Reference Date"
+          },
+          "curation_note": {
+            "type": "string",
+            "title": "Curation Note"
+          },
+          "divergences": {
+            "items": {
+              "$ref": "#/components/schemas/SourceDivergence"
+            },
+            "type": "array",
+            "title": "Divergences"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "topic_id",
+          "reference_date",
+          "curation_note",
+          "divergences"
+        ],
+        "title": "TopicDivergences"
       },
       "TopicRequest": {
         "properties": {

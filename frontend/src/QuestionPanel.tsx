@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { components } from "../../packages/contracts";
 import { buildCalculation, CalculationFields, emptyCalculation } from "./CalculationFields";
+import { DivergenceNotices } from "./DivergencePanel";
 import { EvidencePanel } from "./Evidence";
 
 type Topic = components["schemas"]["Topic"];
@@ -77,6 +78,7 @@ export function QuestionPanel({ topics }: { topics: Topic[] }) {
         ? "Os resultados foram calculados a partir das regras publicadas. Confira a memória de cálculo, as premissas e as fontes."
         : "Os trechos são literais. A correspondência textual não confirma interpretações além do que a fonte declara."}</p>
       {result.notice && <p role="status">{result.notice}</p>}
+      <DivergenceNotices notices={result.divergence_notices ?? []} />
       {result.claims.map((claim, index) => <article className="claim" key={index}>
         {claim.calculation_step != null && <p>Resultado calculado · passo {claim.calculation_step + 1}</p>}
         <blockquote>{claim.text}</blockquote>
