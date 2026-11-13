@@ -11,6 +11,8 @@ x-backend: &backend
     POSTGRES_HOST: db
     AUTH_SECRET: ${AUTH_SECRET:?Configure AUTH_SECRET}
     AUTH_DEMO_ENABLED: ${AUTH_DEMO_ENABLED:-false}
+    AUTH_DEMO_SSO_SECRET: ${AUTH_DEMO_SSO_SECRET:-}
+    AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
     AUTH_DEMO_USERS: ${AUTH_DEMO_USERS:-{}}
     STORAGE_PATH: /data/documents
   volumes:

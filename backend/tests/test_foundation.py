@@ -1,14 +1,13 @@
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
 
-import jwt
 import pytest
-from app.config import get_settings
+from app.config import DemoAccount, get_settings
 from app.ingestion import InvalidDocument, enqueue, extract_pages
 from app.main import app
 from app.worker import process_one
 from conftest import make_pdf
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 from sqlalchemy import text
 
 
@@ -16,12 +15,15 @@ from sqlalchemy import text
 def client(monkeypatch):
     settings = get_settings()
     monkeypatch.setattr(settings, "auth_demo_enabled", True)
+    monkeypatch.setattr(settings, "auth_demo_sso_secret", SecretStr("s" * 32))
+    monkeypatch.setattr(settings, "auth_cookie_secure", False)
     monkeypatch.setattr(
         settings,
         "auth_demo_users",
         {
-            "reader": {"name": "Leitura", "role": "empregado"},
-            "curator": {"name": "Gestão", "role": "gestao"},
+            "reader": DemoAccount(name="Leitura", groups=["clause-empregados"]),
+            "manager": DemoAccount(name="Gestor", groups=["clause-gestores"]),
+            "curator": DemoAccount(name="Gestão", groups=["clause-gestao-acervo"]),
         },
     )
     with TestClient(app) as client:
@@ -61,32 +63,16 @@ def test_reader_cannot_ingest_but_management_can(client, topic):
     )
     assert response.status_code == 202
     version = response.json()["version_id"]
-    assert client.get(f"/api/documents/{version}/file").content == content
-
-
-@pytest.mark.parametrize(
-    "changes",
-    [
-        {"exp": datetime.now(timezone.utc) - timedelta(seconds=10)},
-        {"iss": "outro"},
-        {"aud": "outro"},
-    ],
-)
-def test_rejects_invalid_claims(client, changes):
-    claims = {
-        "sub": "curator",
-        "name": "Gestão",
-        "role": "gestao",
-        "simulated": True,
-        "iat": datetime.now(timezone.utc),
-        "exp": datetime.now(timezone.utc) + timedelta(hours=1),
-        "iss": "ipbot-local-demo",
-        "aud": "ipbot-api",
-        **changes,
-    }
-    token = jwt.encode(claims, get_settings().auth_secret.get_secret_value(), algorithm="HS256")
-    client.cookies.set("ipbot_session", token)
-    assert client.get("/api/auth/me").status_code == 401
+    path = f"/api/documents/{version}/file"
+    assert client.get(path).content == content
+    client.cookies.clear()
+    assert client.get(path, headers={"X-Role": "gestao"}).status_code == 401
+    for subject in ("reader", "manager"):
+        assert client.post("/api/auth/demo/session", json={"user_id": subject}).status_code == 200
+        documents = client.get("/api/documents", params={"topic_id": str(topic)})
+        assert documents.status_code == 200
+        assert version in {document["id"] for document in documents.json()}
+        assert client.get(path).content == content
 
 
 def test_disabled_simulator(client, monkeypatch):

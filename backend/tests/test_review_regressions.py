@@ -11,23 +11,27 @@ from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from app import main
-from app.auth import issue_demo_token
-from app.config import get_settings
+from app.config import DemoAccount, get_settings
 from app.contracts import APIError
 from app.db import get_engine, get_migration_config
 from app.ingestion import enqueue
 from app.worker import process_one
 from conftest import make_pdf
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 from sqlalchemy import text
 
 
 @pytest.fixture
 def management_client(monkeypatch):
     monkeypatch.setattr(get_settings(), "auth_demo_enabled", True)
-    monkeypatch.setattr(get_settings(), "auth_demo_users", {"curator": {"name": "Gestão", "role": "gestao"}})
+    monkeypatch.setattr(get_settings(), "auth_demo_sso_secret", SecretStr("s" * 32))
+    monkeypatch.setattr(get_settings(), "auth_cookie_secure", False)
+    monkeypatch.setattr(
+        get_settings(), "auth_demo_users", {"curator": DemoAccount(name="Gestão", groups=["clause-gestao-acervo"])}
+    )
     with TestClient(main.app) as client:
-        client.cookies.set("ipbot_session", issue_demo_token("curator"))
+        assert client.post("/api/auth/demo/session", json={"user_id": "curator"}).status_code == 200
         yield client
 
 
