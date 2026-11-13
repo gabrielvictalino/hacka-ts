@@ -93,6 +93,15 @@ export function QuestionPanel({ topics, view, userName, homeVersion }: { topics:
     } catch (e) { setError(e instanceof Error ? e.message : "Não foi possível consultar. Tente novamente."); }
     finally { setBusy(false); }
   }
+  function renderClaim(claim: Result["claims"][number], index: number) {
+    return <article className="claim" key={index}>
+      {claim.calculation_step != null && <p>Resultado calculado · passo {claim.calculation_step + 1}</p>}
+      <blockquote>{claim.text}</blockquote>
+      <div className="answer-evidence"><strong>Evidência</strong>{claim.citations.map((c, at) => <button key={`${at}-${c.passage_id}`} onClick={() => setEvidence(c)}>
+        Conferir {c.code || c.title} · {c.version || "versão não identificada"} · p. {c.physical_page}{c.section ? ` · ${c.section}` : ""}
+      </button>)}</div>
+    </article>;
+  }
   function renderSearch() {
     const form = <form className={result || topicDetail ? "question-form search-form" : "question-form"} onSubmit={submit}>
       <label className="sr-only" htmlFor="acervo-question">Pergunta</label>
@@ -165,13 +174,13 @@ export function QuestionPanel({ topics, view, userName, homeVersion }: { topics:
       {unconfirmed && result.gaps.length > 0 && <Gaps gaps={result.gaps} />}
       {result.claims.length === 0 && <p>Nenhuma afirmação foi sustentada pelos trechos do tema.</p>}
       {unconfirmed && result.claims.length > 0 && <p className="muted">Trechos relacionados encontrados no tema. Eles não confirmam os pontos acima.</p>}
-      {result.claims.map((claim, index) => <article className="claim" key={index}>
-        {claim.calculation_step != null && <p>Resultado calculado · passo {claim.calculation_step + 1}</p>}
-        <blockquote>{claim.text}</blockquote>
-        <div className="answer-evidence"><strong>Evidência</strong>{claim.citations.map((c, at) => <button key={`${at}-${c.passage_id}`} onClick={() => setEvidence(c)}>
-          Conferir {c.code || c.title} · {c.version || "versão não identificada"} · p. {c.physical_page}{c.section ? ` · ${c.section}` : ""}
-        </button>)}</div>
-      </article>)}
+      {/* Primeiro trecho selecionado com a fonte; os demais, completos, ficam expansíveis.
+          Passos de cálculo são o próprio resultado e ficam todos visíveis. */}
+      {(result.calculation ? result.claims : result.claims.slice(0, 1)).map((claim, index) => renderClaim(claim, index))}
+      {!result.calculation && result.claims.length > 1 && <details className="more-evidence">
+        <summary>Ver mais {result.claims.length - 1} {result.claims.length === 2 ? "evidência selecionada" : "evidências selecionadas"}</summary>
+        {result.claims.slice(1).map((claim, index) => renderClaim(claim, index + 1))}
+      </details>}
       {!unconfirmed && result.gaps.length > 0 && <Gaps gaps={result.gaps} />}
       <p className="muted">{context}{resultView ? ` · Visão: ${resultView}` : ""}</p>
       <p className="muted">{result.mode === "extractive" ? "Modo extrativo" : "Seleção de trechos por modelo"} · Referência: {result.reference_date}</p>
