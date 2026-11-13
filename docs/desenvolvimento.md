@@ -99,7 +99,35 @@ O hash SHA-256 por tema evita duplicação inclusive entre chamadas concorrentes
 
 A seleção usa `FOR UPDATE SKIP LOCKED` e um advisory lock de sessão por versão. O estado `processing` e o progresso são visíveis em transações curtas, enquanto páginas, trechos e `ready` são publicados atomicamente em outra transação. A queda da conexão libera o advisory lock e permite retomar uma versão em `processing`, sem duplicar citações. Falhas de extração ou persistência revertem a publicação e não bloqueiam o próximo arquivo.
 
-Os originais ficam no volume `documents`, por hash, e são servidos por `GET /api/documents/{version_id}/file`. Acrescente `#page=2` para abrir uma página física. Fatos curados não são criados automaticamente; a curadoria pertence à issue #14.
+Os originais ficam no volume `documents`, por hash, e são servidos por `GET /api/documents/{version_id}/file`. Acrescente `#page=2` para abrir uma página física. Fatos curados não são criados pela ingestão; a curadoria é uma etapa própria, descrita abaixo.
+
+## Fatos curados e regras · issue #14
+
+`backend/app/fatos/catalogo.py` registra os fatos de Férias e Inovação revisados manualmente contra os PDFs do acervo, para as perspectivas Prazos (`deadline`) e Valores (`value`). Cada fato guarda atributo normalizado, área, enunciado, responsável, valor numérico, valor como aparece na fonte (`value_text`), unidade, período (`starts_on`/`ends_on`) e condições. Cada fonte aponta documento, versão, página física, item e o trecho literal revisado. A migração `0004` acrescenta esses campos a `curated_facts` e `fact_citations`.
+
+Depois de importar o acervo e concluir a extração, publique o catálogo:
+
+```sh
+docker compose run --rm api python -m app.fatos.curadoria --strict
+```
+
+A Gestão também pode publicar por `POST /api/fatos/curadoria`, que exige o perfil `gestao`. A publicação localiza cada trecho na passagem da edição exata revisada, que precisa estar `ready`, tolerando só diferenças de espaço e quebra de linha, e grava o texto literal encontrado. Um fato cuja fonte não é encontrada fica `pending`, com o motivo, e não é apresentado. Uma nova ingestão nunca cria fatos e uma nova edição não herda os fatos da anterior: atualizar a fonte exige revisar o catálogo e publicá-lo outra vez. Repetir a publicação é idempotente, e chaves retiradas do catálogo deixam de ser exibidas nos temas que ele cobre. Com o acervo de referência, os 59 fatos são publicados sem pendências.
+
+`GET /fatos` (alias `GET /api/fatos`) aceita `categoria` (`deadline`, `value`, `obligation` ou `risk`), `assunto` (ID do tema) e `area` (sem diferenciar maiúsculas). A resposta traz os fatos na ordem do catálogo, com `tags` como `jornada`, `linha_do_tempo`, `grafico_orcamento` e `alcada` para os visuais, e cada citação no formato canônico de evidência. Obrigações, Riscos e Locação ainda não têm curadoria e retornam lista vazia; a extração automática fica para a evolução (#24).
+
+Os cálculos rodam em código, com parâmetros lidos dos fatos curados. Cada passo devolve o resultado, a demonstração (`computation`) e as citações dos fatos usados. Sem os fatos necessários, a rota responde 409.
+
+| Rota | Cálculo |
+| --- | --- |
+| `POST /ferias/calcular` (alias `POST /api/regras/ferias/prazos`) | A partir do início de gozo: dia vedado, D-45, decisões do gestor e do diretor, D-35, assinatura, pagamento antecipado para o dia útil anterior e marcos de alteração. Aceita `holidays`, `request_registered_on` e `notice_received_on`. |
+| `POST /api/regras/ferias/ausencia-simultanea` | 30% da equipe, arredondado para baixo, com mínimo de 1. |
+| `POST /api/regras/ferias/dias-por-faltas` | Faixa da Tabela 1 do TB_1111-001. |
+| `POST /api/regras/ferias/ressarcimento` | Ressarcimento limitado a R$ 2.500,00 por evento. |
+| `POST /api/regras/inovacao/alcada` | Faixas de R$ 18.000,00 e R$ 120.000,00 por ideia. |
+| `GET /api/regras/inovacao/orcamento` | Soma dos itens, R$ 24.000,00 de premiações dentro dos R$ 96.000,00 de orçamento total e participação de cada item. Divergências entre as fontes aparecem em `warnings`. |
+| `GET /api/regras/inovacao/pagamento-premiacao` | Premiação em 30/06/2027 + 30 dias. |
+
+O acervo não traz o calendário de feriados da sede. Os dias úteis excluem sábados, domingos e os feriados informados em `holidays`, e a resposta registra essa premissa. O exemplo 1 do Anexo C da NG_111 é coberto pelos testes. A divergência AC-03 entre a NG_111 (D-35) e o PX_1111-001 (item 8.4.2) é tratada na #15.
 
 ## Identidade e autorização
 

@@ -1,6 +1,6 @@
 """Fonte dos contratos Python, OpenAPI e tipos TypeScript gerados."""
 
-from datetime import date
+from datetime import date, datetime
 from enum import StrEnum
 from typing import Literal
 from uuid import UUID
@@ -148,3 +148,82 @@ class QuestionResponse(Contract):
     passages: list[Citation]
     gaps: list[str]
     divergences: list[Divergence]
+
+
+class CuratedFact(Contract):
+    """Fato revisado manualmente; cada citação aponta para o trecho literal da edição publicada."""
+
+    id: UUID
+    key: str | None = Field(description="Identificador estável no catálogo de curadoria")
+    topic_id: UUID
+    topic: str
+    category: Perspective
+    attribute: str | None = Field(description="Atributo normalizado para comparar o mesmo fato entre fontes")
+    area: str | None = Field(description="Unidade ou papel responsável, usado no filtro por área")
+    statement: str
+    responsible: str | None
+    value: float | None = Field(
+        description="Valor numérico para cálculos e gráficos; o texto da fonte fica em value_text"
+    )
+    value_text: str | None = Field(description="Valor como aparece na fonte, com a unidade original")
+    unit: str | None
+    starts_on: date | None = None
+    ends_on: date | None = None
+    conditions: str | None
+    tags: list[str]
+    curated_by: str
+    curated_at: datetime
+    citations: list[Citation] = Field(min_length=1)
+
+
+class CurationItem(Contract):
+    key: str
+    status: Literal["published", "pending"]
+    reason: str | None = None
+
+
+class CurationReport(Contract):
+    published: int
+    pending: int
+    items: list[CurationItem]
+
+
+class RuleStep(Contract):
+    """Um resultado calculado em código, com a demonstração e as fontes dos parâmetros usados."""
+
+    label: str
+    rule: str
+    result_text: str
+    result_date: date | None = None
+    result_value: float | None = None
+    computation: list[str]
+    fact_keys: list[str]
+    citations: list[Citation]
+
+
+class RuleResult(Contract):
+    rule: str
+    steps: list[RuleStep]
+    warnings: list[str] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
+
+
+class VacationScheduleRequest(Contract):
+    start_date: date = Field(description="Início de gozo (D)")
+    holidays: list[date] = Field(
+        default_factory=list, max_length=366, description="Feriados da sede; o acervo não traz o calendário"
+    )
+    request_registered_on: date | None = Field(default=None, description="Data de registro da solicitação")
+    notice_received_on: date | None = Field(default=None, description="Data de recebimento do aviso")
+
+
+class TeamAbsenceRequest(Contract):
+    team_size: int = Field(ge=1, le=100000)
+
+
+class UnjustifiedAbsencesRequest(Contract):
+    absences: int = Field(ge=0, le=366)
+
+
+class AmountRequest(Contract):
+    amount: float = Field(gt=0, le=1_000_000_000)

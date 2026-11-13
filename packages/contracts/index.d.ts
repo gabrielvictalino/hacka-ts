@@ -106,6 +106,199 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fatos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Facts
+         * @description Fatos curados para perspectivas, filtros e visuais. Obrigações e Riscos ainda não têm curadoria.
+         */
+        get: operations["facts_api_fatos_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fatos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Facts */
+        get: operations["facts_fatos_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fatos/curadoria": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish
+         * @description Publica o catálogo revisado para as edições já ingeridas; fatos sem fonte disponível ficam pendentes.
+         */
+        post: operations["publish_api_fatos_curadoria_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/regras/ferias/prazos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Vacation Schedule */
+        post: operations["vacation_schedule_api_regras_ferias_prazos_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ferias/calcular": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Vacation Schedule */
+        post: operations["vacation_schedule_ferias_calcular_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/regras/ferias/ausencia-simultanea": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Simultaneous Absence */
+        post: operations["simultaneous_absence_api_regras_ferias_ausencia_simultanea_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/regras/ferias/dias-por-faltas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Vacation Days */
+        post: operations["vacation_days_api_regras_ferias_dias_por_faltas_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/regras/ferias/ressarcimento": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reimbursement */
+        post: operations["reimbursement_api_regras_ferias_ressarcimento_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/regras/inovacao/alcada": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approval Authority */
+        post: operations["approval_authority_api_regras_inovacao_alcada_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/regras/inovacao/orcamento": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Budget */
+        get: operations["budget_api_regras_inovacao_orcamento_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/regras/inovacao/pagamento-premiacao": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Prize Payment */
+        get: operations["prize_payment_api_regras_inovacao_pagamento_premiacao_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health/live": {
         parameters: {
             query?: never;
@@ -270,6 +463,11 @@ export interface components {
             /** Detail */
             detail: string | components["schemas"]["ValidationIssue"][];
         };
+        /** AmountRequest */
+        AmountRequest: {
+            /** Amount */
+            amount: number;
+        };
         /** AuthCallbackRequest */
         AuthCallbackRequest: {
             /** Token */
@@ -337,6 +535,94 @@ export interface components {
             text: string;
             /** Citations */
             citations: components["schemas"]["Citation"][];
+        };
+        /**
+         * CuratedFact
+         * @description Fato revisado manualmente; cada citação aponta para o trecho literal da edição publicada.
+         */
+        CuratedFact: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Key
+             * @description Identificador estável no catálogo de curadoria
+             */
+            key: string | null;
+            /**
+             * Topic Id
+             * Format: uuid
+             */
+            topic_id: string;
+            /** Topic */
+            topic: string;
+            category: components["schemas"]["Perspective"];
+            /**
+             * Attribute
+             * @description Atributo normalizado para comparar o mesmo fato entre fontes
+             */
+            attribute: string | null;
+            /**
+             * Area
+             * @description Unidade ou papel responsável, usado no filtro por área
+             */
+            area: string | null;
+            /** Statement */
+            statement: string;
+            /** Responsible */
+            responsible: string | null;
+            /**
+             * Value
+             * @description Valor numérico para cálculos e gráficos; o texto da fonte fica em value_text
+             */
+            value: number | null;
+            /**
+             * Value Text
+             * @description Valor como aparece na fonte, com a unidade original
+             */
+            value_text: string | null;
+            /** Unit */
+            unit: string | null;
+            /** Starts On */
+            starts_on?: string | null;
+            /** Ends On */
+            ends_on?: string | null;
+            /** Conditions */
+            conditions: string | null;
+            /** Tags */
+            tags: string[];
+            /** Curated By */
+            curated_by: string;
+            /**
+             * Curated At
+             * Format: date-time
+             */
+            curated_at: string;
+            /** Citations */
+            citations: components["schemas"]["Citation"][];
+        };
+        /** CurationItem */
+        CurationItem: {
+            /** Key */
+            key: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "published" | "pending";
+            /** Reason */
+            reason?: string | null;
+        };
+        /** CurationReport */
+        CurationReport: {
+            /** Published */
+            published: number;
+            /** Pending */
+            pending: number;
+            /** Items */
+            items: components["schemas"]["CurationItem"][];
         };
         /** DemoAssertion */
         DemoAssertion: {
@@ -508,6 +794,44 @@ export interface components {
          * @enum {string}
          */
         Role: "empregado" | "gestor" | "gestao";
+        /** RuleResult */
+        RuleResult: {
+            /** Rule */
+            rule: string;
+            /** Steps */
+            steps: components["schemas"]["RuleStep"][];
+            /** Warnings */
+            warnings?: string[];
+            /** Assumptions */
+            assumptions?: string[];
+        };
+        /**
+         * RuleStep
+         * @description Um resultado calculado em código, com a demonstração e as fontes dos parâmetros usados.
+         */
+        RuleStep: {
+            /** Label */
+            label: string;
+            /** Rule */
+            rule: string;
+            /** Result Text */
+            result_text: string;
+            /** Result Date */
+            result_date?: string | null;
+            /** Result Value */
+            result_value?: number | null;
+            /** Computation */
+            computation: string[];
+            /** Fact Keys */
+            fact_keys: string[];
+            /** Citations */
+            citations: components["schemas"]["Citation"][];
+        };
+        /** TeamAbsenceRequest */
+        TeamAbsenceRequest: {
+            /** Team Size */
+            team_size: number;
+        };
         /** Topic */
         Topic: {
             /**
@@ -522,6 +846,35 @@ export interface components {
         TopicRequest: {
             /** Name */
             name: string;
+        };
+        /** UnjustifiedAbsencesRequest */
+        UnjustifiedAbsencesRequest: {
+            /** Absences */
+            absences: number;
+        };
+        /** VacationScheduleRequest */
+        VacationScheduleRequest: {
+            /**
+             * Start Date
+             * Format: date
+             * @description Início de gozo (D)
+             */
+            start_date: string;
+            /**
+             * Holidays
+             * @description Feriados da sede; o acervo não traz o calendário
+             */
+            holidays?: string[];
+            /**
+             * Request Registered On
+             * @description Data de registro da solicitação
+             */
+            request_registered_on?: string | null;
+            /**
+             * Notice Received On
+             * @description Data de recebimento do aviso
+             */
+            notice_received_on?: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -724,6 +1077,455 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Identity"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    facts_api_fatos_get: {
+        parameters: {
+            query?: {
+                /** @description deadline = Prazos, value = Valores */
+                categoria?: components["schemas"]["Perspective"] | null;
+                /** @description ID do tema */
+                assunto?: string | null;
+                area?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                ipbot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CuratedFact"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    facts_fatos_get: {
+        parameters: {
+            query?: {
+                /** @description deadline = Prazos, value = Valores */
+                categoria?: components["schemas"]["Perspective"] | null;
+                /** @description ID do tema */
+                assunto?: string | null;
+                area?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                ipbot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CuratedFact"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publish_api_fatos_curadoria_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ipbot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurationReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    vacation_schedule_api_regras_ferias_prazos_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ipbot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VacationScheduleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleResult"];
+                };
+            };
+            /** @description Fatos necessários ao cálculo ainda não foram curados */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    vacation_schedule_ferias_calcular_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ipbot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VacationScheduleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleResult"];
+                };
+            };
+            /** @description Fatos necessários ao cálculo ainda não foram curados */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    simultaneous_absence_api_regras_ferias_ausencia_simultanea_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ipbot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeamAbsenceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleResult"];
+                };
+            };
+            /** @description Fatos necessários ao cálculo ainda não foram curados */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    vacation_days_api_regras_ferias_dias_por_faltas_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ipbot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnjustifiedAbsencesRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleResult"];
+                };
+            };
+            /** @description Fatos necessários ao cálculo ainda não foram curados */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reimbursement_api_regras_ferias_ressarcimento_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ipbot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AmountRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleResult"];
+                };
+            };
+            /** @description Fatos necessários ao cálculo ainda não foram curados */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approval_authority_api_regras_inovacao_alcada_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ipbot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AmountRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleResult"];
+                };
+            };
+            /** @description Fatos necessários ao cálculo ainda não foram curados */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    budget_api_regras_inovacao_orcamento_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ipbot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleResult"];
+                };
+            };
+            /** @description Fatos necessários ao cálculo ainda não foram curados */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    prize_payment_api_regras_inovacao_pagamento_premiacao_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ipbot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleResult"];
+                };
+            };
+            /** @description Fatos necessários ao cálculo ainda não foram curados */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
                 };
             };
             /** @description Validation Error */
