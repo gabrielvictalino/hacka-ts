@@ -574,10 +574,30 @@ export interface components {
             /** Detail */
             detail: string | components["schemas"]["ValidationIssue"][];
         };
+        /** AbsencesCalculation */
+        AbsencesCalculation: {
+            /** Absences */
+            absences: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            rule: "ferias.dias_por_faltas";
+        };
         /** AmountRequest */
         AmountRequest: {
             /** Amount */
             amount: number;
+        };
+        /** ApprovalCalculation */
+        ApprovalCalculation: {
+            /** Amount */
+            amount: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            rule: "inovacao.alcada";
         };
         /** AuthCallbackRequest */
         AuthCallbackRequest: {
@@ -611,6 +631,14 @@ export interface components {
             topic_id: string;
             /** Files */
             files: string[];
+        };
+        /** BudgetCalculation */
+        BudgetCalculation: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            rule: "inovacao.orcamento";
         };
         /** Citation */
         Citation: {
@@ -657,6 +685,11 @@ export interface components {
         };
         /** Claim */
         Claim: {
+            /**
+             * Calculation Step
+             * @description Índice do passo calculado pelo backend
+             */
+            calculation_step?: number | null;
             /** Text */
             text: string;
             /** Citations */
@@ -988,6 +1021,14 @@ export interface components {
             applicable: boolean;
             citation: components["schemas"]["Citation"];
         };
+        /** PrizeCalculation */
+        PrizeCalculation: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            rule: "inovacao.pagamento_premiacao";
+        };
         /** QuestionFilters */
         QuestionFilters: {
             /** Area */
@@ -1006,9 +1047,12 @@ export interface components {
             reference_date?: string | null;
             perspective?: components["schemas"]["Perspective"] | null;
             filters?: components["schemas"]["QuestionFilters"];
+            /** Calculation */
+            calculation?: (components["schemas"]["VacationCalculation"] | components["schemas"]["TeamCalculation"] | components["schemas"]["AbsencesCalculation"] | components["schemas"]["ReimbursementCalculation"] | components["schemas"]["ApprovalCalculation"] | components["schemas"]["BudgetCalculation"] | components["schemas"]["PrizeCalculation"]) | null;
         };
         /** QuestionResponse */
         QuestionResponse: {
+            calculation?: components["schemas"]["RuleResult"] | null;
             /** Notice */
             notice?: string | null;
             /**
@@ -1039,6 +1083,16 @@ export interface components {
              * @description Divergências curadas que envolvem as fontes recuperadas
              */
             divergence_notices?: components["schemas"]["DivergenceNotice"][];
+        };
+        /** ReimbursementCalculation */
+        ReimbursementCalculation: {
+            /** Amount */
+            amount: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            rule: "ferias.ressarcimento";
         };
         /**
          * Role
@@ -1159,6 +1213,16 @@ export interface components {
             /** Team Size */
             team_size: number;
         };
+        /** TeamCalculation */
+        TeamCalculation: {
+            /** Team Size */
+            team_size: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            rule: "ferias.ausencia_simultanea";
+        };
         /** Topic */
         Topic: {
             /**
@@ -1212,6 +1276,35 @@ export interface components {
         UnjustifiedAbsencesRequest: {
             /** Absences */
             absences: number;
+        };
+        /** VacationCalculation */
+        VacationCalculation: {
+            /**
+             * Start Date
+             * Format: date
+             * @description Início de gozo (D)
+             */
+            start_date: string;
+            /**
+             * Holidays
+             * @description Feriados da sede; o acervo não traz o calendário
+             */
+            holidays?: string[];
+            /**
+             * Request Registered On
+             * @description Data de registro da solicitação
+             */
+            request_registered_on?: string | null;
+            /**
+             * Notice Received On
+             * @description Data de recebimento do aviso
+             */
+            notice_received_on?: string | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            rule: "ferias.prazos";
         };
         /** VacationScheduleRequest */
         VacationScheduleRequest: {

@@ -38,6 +38,12 @@ a { color: #17645b; }
 .citations { display: flex; flex-wrap: wrap; gap: 8px; }
 .link-button { background: none; color: #17645b; border: 1px solid #8ba49c; padding: 6px 10px; text-align: left; overflow-wrap: anywhere; }
 @media (max-width: 500px) { main { padding: 28px 12px; } section { padding: 16px; } }
+
+.calculation-fields { margin: 8px 0 20px; padding: 16px; border: 1px solid #d9e4dd; border-radius: 8px; min-width: 0; }
+.calculation-fields legend { font-weight: 600; padding: 0 6px; }
+.holiday-row { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 12px; }
+.holiday-row label { flex: 1; min-width: 160px; margin-bottom: 0; }
+
 .divergence-card { margin-top: 20px; border-top: 1px solid #d9e4dd; padding-top: 16px; }
 .divergence-card h4 { margin: 0 0 8px; overflow-wrap: anywhere; }
 .divergence-card .facts { grid-template-columns: 1fr; }
