@@ -267,3 +267,141 @@ def test_topic_boundary_is_enforced(reader, topic):
     finally:
         with get_engine().begin() as connection:
             connection.execute(text("DELETE FROM topics WHERE id=:id"), {"id": other})
+
+
+@pytest.mark.parametrize(
+    "declaration",
+    [
+        "Substitui a NG_111 versão 2.0.0",
+        "Substitui a NG_111\nversão 2.0.0",
+        "Substitui a versão 2.0.0",
+        "Substitui a v2",
+    ],
+)
+def test_historical_previous_phase_with_collection_successor_wording(reader, topic, declaration):
+    old, content = ingest(
+        topic,
+        [
+            "Título: Férias\nSigla e Número: NG_111\nVersão: 2.0.0\nFase: Versão anterior\n"
+            "Vigência: 10/12/2025 a 10/06/2027",
+            "1. Férias: prazo de 30 dias corridos.",
+        ],
+    )
+    new, _ = ingest(
+        topic,
+        [
+            "Título: Férias\nSigla e Número: NG_111\nVersão: 3.0.0\nFase: Vigente\n"
+            f"Vigência: 03/08/2026 a 03/02/2028\n{declaration}",
+            "1. Férias: prazo de 45 dias corridos.",
+        ],
+    )
+    historical = ask(reader, topic, "Qual o prazo de férias em 10/07/2026?")
+    assert historical["status"] == "supported"
+    assert {c["version_id"] for c in historical["passages"]} == {str(old)}
+    source = historical["passages"][0]
+    for reference, expected in (("2026-08-02", old), ("2026-08-03", new), ("2026-11-12", new)):
+        result = ask(reader, topic, "Prazo de férias", reference_date=reference)
+        assert {c["version_id"] for c in result["passages"]} == {str(expected)}
+    assert reader.get(f"/api/citations/{source['passage_id']}").json() == source
+    assert reader.get(f"/api/documents/{old}/file").content == content
+
+
+def test_succession_mentioning_another_code_does_not_replace_version(reader, topic):
+    old, _ = ingest(
+        topic,
+        [
+            "Título: Férias\nSigla e Número: NG_111\nVersão: 2.0.0\nFase: Vigente\nVigência: 01/01/2025 a 31/12/2027",
+            "Férias: prazo de 30 dias.",
+        ],
+    )
+    new, _ = ingest(
+        topic,
+        [
+            "Título: Férias\nSigla e Número: NG_111\nVersão: 3.0.0\nFase: Vigente\n"
+            "Vigência: 03/08/2026 a 31/12/2028\nSubstitui a NG_999 versão 2.0.0",
+            "Férias: prazo de 45 dias.",
+        ],
+    )
+    result = ask(reader, topic, "Prazo férias", reference_date="2026-11-12")
+    assert {c["version_id"] for c in result["passages"]} == {str(old), str(new)}
+
+
+@pytest.mark.parametrize(
+    "literal",
+    [
+        "O prazo de férias é de 45 dias. Para cancelar, consulte a GGC.",
+        "O prazo de férias é de 45 dias; para cancelar, consulte a GGC.",
+        "O prazo para cancelar férias deve ser consultado com a GGC.",
+        "O prazo para cancelar férias não consta no acervo; férias duram 45 dias.",
+        "O prazo para cancelar férias não foi definido, apesar do aviso de 45 dias.",
+    ],
+)
+def test_related_words_do_not_confirm_unanswered_cancellation_deadline(reader, topic, literal):
+    ingest(topic, [literal])
+    result = ask(reader, topic, "Qual o prazo para cancelar férias?")
+    assert result["status"] == "partial"
+    assert result["gaps"] == ["Não consta confirmação completa para: Qual o prazo para cancelar férias."]
+    assert result["claims"][0]["text"] == literal
+
+
+def test_explicit_deadline_for_requested_action_is_supported(reader, topic):
+    ingest(topic, ["O prazo para cancelar férias é de 5 dias úteis."])
+    result = ask(reader, topic, "Qual o prazo para cancelar férias?")
+    assert result["status"] == "supported" and not result["gaps"]
+
+
+@pytest.fixture
+def bedrock_selection(monkeypatch):
+    import json
+
+    import boto3
+
+    def configure(citations):
+        class Model:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                pass
+
+            def converse(self, **kwargs):
+                payload = {"claims": [{"passage_id": c["passage_id"], "text": c["excerpt"]} for c in citations]}
+                return {"output": {"message": {"content": [{"text": json.dumps(payload)}]}}}
+
+        monkeypatch.setattr(boto3, "client", lambda *a, **k: Model())
+        monkeypatch.setattr(get_settings(), "bedrock_model_id", "test-model")
+
+    return configure
+
+
+def test_model_dropping_supported_point_falls_back_to_complete_extractive_answer(reader, topic, bedrock_selection):
+    ingest(topic, ["1. Férias: prazo de 30 dias.\n2. Locação: valor de R$ 500 por mês."])
+    question = "Qual o prazo de férias? Qual o valor de locação?"
+    baseline = ask(reader, topic, question)
+    assert baseline["status"] == "supported"
+    bedrock_selection([next(c for c in baseline["passages"] if "30 dias" in c["excerpt"])])
+    result = ask(reader, topic, question)
+    assert result["notice"] and result["mode"] == "extractive"
+    assert result["claims"] == baseline["claims"]
+    assert result["passages"] == baseline["passages"] and result["gaps"] == baseline["gaps"]
+
+
+def test_model_retaining_each_supported_point_can_generate(reader, topic, bedrock_selection):
+    ingest(topic, ["1. Férias: prazo de 30 dias.\n2. Locação: valor de R$ 500 por mês."])
+    question = "Qual o prazo de férias? Qual o valor de locação?"
+    baseline = ask(reader, topic, question)
+    bedrock_selection(list(reversed(baseline["passages"])))
+    result = ask(reader, topic, question)
+    assert result["mode"] == "generated" and result["status"] == "supported"
+    assert result["notice"] is None and not result["gaps"]
+    assert {claim["text"] for claim in result["claims"]} == {claim["text"] for claim in baseline["claims"]}
+
+
+def test_model_cannot_replace_support_with_merely_related_passage(reader, topic, bedrock_selection):
+    ingest(topic, ["1. Férias: prazo de 30 dias.\n2. Para férias, consulte a GGC."])
+    baseline = ask(reader, topic, "Qual o prazo de férias?")
+    assert baseline["status"] == "supported"
+    bedrock_selection([next(c for c in baseline["passages"] if "consulte" in c["excerpt"])])
+    result = ask(reader, topic, "Qual o prazo de férias?")
+    assert result["mode"] == "extractive" and result["notice"]
+    assert result["claims"] == baseline["claims"]

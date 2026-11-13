@@ -164,9 +164,12 @@ O filtro de área exige a presença textual da área no trecho; as perspectivas 
 vocabulário de prazos, valores, obrigações ou riscos. Não há inferência de área ou responsável.
 
 As perguntas são separadas em pontos por `?`, `;`, quebra de linha ou ` e `, com até 12 pontos.
-A classificação `supported` significa que todos os termos relevantes de cada ponto aparecem
-juntos em ao menos um trecho; `partial` indica trechos relacionados com pontos sem correspondência
-completa; `insufficient` indica ausência de trechos verificáveis. As lacunas identificam o ponto
+A classificação `supported` exige os termos relevantes de cada ponto juntos em uma mesma
+frase, sem encaminhamento para consulta externa ou declaração de informação ausente. Perguntas
+sobre prazo exigem número com unidade temporal ou data explícita; perguntas sobre valor exigem
+valor monetário ou percentual explícito. Isso evita combinar o prazo de uma ação com o mero
+encaminhamento de outra dentro do mesmo trecho. `partial` indica trechos relacionados com pontos
+sem confirmação completa; `insufficient` indica ausência de trechos verificáveis. As lacunas identificam o ponto
 sem confirmação e não são preenchidas pelo modelo. A classificação é textual, conservadora e
 não constitui validação semântica de uma interpretação. Não há detecção de divergências nesta issue.
 
@@ -175,7 +178,9 @@ referência informada no campo tem prioridade. Uma única data `DD/MM/AAAA` ou `
 pergunta também é reconhecida; várias datas exigem o campo explícito. Sem data, usa-se o dia
 em `America/Recife`. Uma versão futura pode ser consultada escolhendo sua data de vigência.
 A sucessão considera `superseded_by` ou declaração inequívoca `Substitui a v2` / `Substitui a versão
-2.0.0` na primeira página do mesmo documento, com início confirmado da sucessora. Não se presume
+2.0.0` / `Substitui a NG_111 versão 2.0.0` na primeira página do mesmo documento, com início
+confirmado da sucessora. Quando a declaração inclui um código, ele precisa corresponder ao
+documento substituído. A fase “Versão anterior” continua elegível antes do início da sucessora. Não se presume
 substituição por ordem de upload ou maior número da edição. Fases anteriores com aplicabilidade
 incerta são excluídas; sem datas em uma fonte corrente, a interface mostra a ausência do intervalo.
 Regras temporais mais amplas seguem no cartão de vigência.
@@ -200,7 +205,14 @@ indisponibilidade e timeout retornam os trechos locais originais, com um aviso c
 O timeout de leitura é `BEDROCK_TIMEOUT_SECONDS` (padrão 5 s, entre 1 e 30), o de conexão
 é 2 s, sem retentativas da invocação. A recuperação no PostgreSQL acontece antes da chamada;
 a geração nunca decide elegibilidade, lacunas ou URLs das fontes. Todos os trechos recuperados
-continuam acessíveis na tela, mesmo quando o modelo seleciona apenas alguns.
+continuam acessíveis na tela, mesmo quando o modelo seleciona apenas alguns. Antes de aceitar
+a seleção, o backend exige na resposta principal ao menos uma evidência que confirma cada ponto
+confirmado e uma evidência relacionada a cada ponto parcial recuperado. Se o modelo omitir um
+desses pontos ou escolher apenas uma fonte relacionada para um ponto confirmado, retorna a
+resposta extrativa completa com o aviso de contingência.
+
+No Compose, somente a API recebe a configuração Bedrock e as credenciais AWS. Worker, migrador
+e importador recebem apenas as configurações locais necessárias.
 
 Os testes de consulta usam PDFs sintéticos para Férias, Inovação e Locação e PostgreSQL real.
 Cobrem filtros, respostas parciais, ausência de evidência, data histórica, sucessão, literalidade,

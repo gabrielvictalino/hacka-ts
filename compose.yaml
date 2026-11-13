@@ -15,13 +15,6 @@ x-backend: &backend
     AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
     AUTH_DEMO_USERS: ${AUTH_DEMO_USERS:-{}}
     STORAGE_PATH: /data/documents
-    BEDROCK_MODEL_ID: ${BEDROCK_MODEL_ID:-}
-    BEDROCK_REGION: ${BEDROCK_REGION:-us-east-1}
-    BEDROCK_TIMEOUT_SECONDS: ${BEDROCK_TIMEOUT_SECONDS:-5}
-    AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
-    AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
-    AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
-    AWS_EC2_METADATA_DISABLED: 'true'
   volumes:
     - ./backend:/app/backend
     - documents:/data/documents
@@ -50,6 +43,15 @@ services:
 
   api:
     <<: *backend
+    environment:
+      <<: *backend-env
+      BEDROCK_MODEL_ID: ${BEDROCK_MODEL_ID:-}
+      BEDROCK_REGION: ${BEDROCK_REGION:-us-east-1}
+      BEDROCK_TIMEOUT_SECONDS: ${BEDROCK_TIMEOUT_SECONDS:-5}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      AWS_EC2_METADATA_DISABLED: 'true'
     command: [uvicorn, app.main:app, --app-dir, backend, --host, 0.0.0.0, --port, '8000', --reload]
     ports:
       - '127.0.0.1:${API_PORT:-8000}:8000'

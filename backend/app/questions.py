@@ -12,6 +12,7 @@ from sqlalchemy import text
 from app.config import get_settings
 from app.contracts import Citation, Claim, QuestionRequest, QuestionResponse
 from app.db import get_engine
+from app.document_parser import CODE
 
 logger = logging.getLogger(__name__)
 # Palavras de formulação da pergunta não são requisitos de evidência.
@@ -26,6 +27,32 @@ PERSPECTIVES = {
     "obligation": "deve deverá obrigatório responsável obrigação",
     "risk": "risco penalidade multa vedado proibido",
 }
+SUCCESSION = re.compile(
+    rf"\bsubstitui\s+(?:a\s+)?(?:(?P<code>{CODE})\s+)?"
+    r"(?:versão\s*|v\s*)(?P<version>\d+(?:\.\d+)*)\b",
+    re.I,
+)
+# A recuperação usa a passagem inteira; suporte exige uma afirmação local.
+SENTENCE_BOUNDARY = r"(?<=[.!?;])\s+|[\r\n]+"
+UNCERTAIN_STATEMENT = (
+    r"consult[ae]|encaminh|entre em contato|a confirmar|"
+    r"não (consta|há|informa|especifica|define|estabelece)|"
+    r"não (está |foi |é )?(informad|definid|especificad|estabelecid)|"
+    r"sem (confirmação|definição|informação|prazo|valor)"
+)
+
+
+def answer_pattern(question):
+    """Prazo e valor precisam estar explícitos, além dos termos de busca."""
+    if re.search(r"\b(quem|responsável)\b", question, re.I):
+        return ""
+    if re.search(r"prazo|antecedência|quantos?\s+(dias?|horas?|meses?)", question, re.I):
+        return r"\d+\s*(dias?|horas?|semanas?|meses?|anos?)\M|\d{2}/\d{2}/\d{4}|\d{4}-\d{2}-\d{2}"
+    if re.search(r"valor|cust[oa]|preço|quanto", question, re.I):
+        return r"R\$\s*\d|\d+([.,]\d+)?\s*(reais|%|por cento)"
+    return ""
+
+
 CITATION_COLUMNS = """v.id AS version_id, v.document_id, s.id AS passage_id,
     COALESCE(v.title, d.title, v.filename) AS title, d.code, v.version,
     p.physical_page, s.excerpt, s.section, v.document_type, v.document_layer,
@@ -61,8 +88,8 @@ def eligible_versions(connection, topic_id, reference):
         connection.execute(
             text("""
         SELECT v.id, v.document_id, v.version, v.status, v.valid_from, v.valid_until,
-               v.superseded_by, v.declared_phase, COALESCE(p.text, '') AS header
-        FROM document_versions v LEFT JOIN pages p ON p.version_id=v.id AND p.physical_page=1
+               v.superseded_by, v.declared_phase, d.code, COALESCE(p.text, '') AS header
+        FROM document_versions v JOIN documents d ON d.id=v.document_id LEFT JOIN pages p ON p.version_id=v.id AND p.physical_page=1
         WHERE v.topic_id=:topic
     """),
             {"topic": topic_id},
@@ -84,8 +111,11 @@ def eligible_versions(connection, topic_id, reference):
         for successor in ready.values():
             if successor["document_id"] != version["document_id"] or successor["id"] == version["id"]:
                 continue
-            replaced = re.findall(r"substitui\s+(?:a\s+)?(?:versão\s*|v\s*)(\d+(?:\.\d+)*)", successor["header"], re.I)
-            for old in replaced:
+            for declaration in SUCCESSION.finditer(successor["header"]):
+                code = declaration["code"]
+                if code and code.casefold() != (version["code"] or "").casefold():
+                    continue
+                old = declaration["version"]
                 matches = [
                     v
                     for v in ready.values()
@@ -131,6 +161,7 @@ def answer(body: QuestionRequest) -> QuestionResponse:
     if len(facets) > 12:
         raise HTTPException(422, "Divida a consulta em até 12 pontos por pergunta.")
     gaps, citations, confirmed = [], {}, 0
+    coverage = []
     with get_engine().connect() as connection:
         if not connection.execute(text("SELECT 1 FROM topics WHERE id=:id"), {"id": body.topic_id}).scalar():
             raise HTTPException(404, "Tema não encontrado.")
@@ -145,7 +176,12 @@ def answer(body: QuestionRequest) -> QuestionResponse:
                     replace(plainto_tsquery('portuguese', :perspective)::text, ' & ', ' | ')::tsquery AS perspective
                 )
                 SELECT {CITATION_COLUMNS}, p.text AS page_text,
-                    s.search_vector @@ q.full_query AS complete
+                    EXISTS (
+                        SELECT 1 FROM regexp_split_to_table(s.excerpt, :sentence_boundary) AS assertion(sentence)
+                        WHERE to_tsvector('portuguese', sentence) @@ q.full_query
+                            AND sentence !~* :uncertain
+                            AND (:answer_pattern = '' OR sentence ~* :answer_pattern)
+                    ) AS complete
                 {CITATION_JOINS} CROSS JOIN query q
                 WHERE v.id = ANY(CAST(:versions AS uuid[])) AND v.status='ready'
                     AND v.topic_id=:topic AND s.search_vector @@ q.broad_query
@@ -157,6 +193,9 @@ def answer(body: QuestionRequest) -> QuestionResponse:
             """),
                     {
                         "question": query_terms(facet),
+                        "sentence_boundary": SENTENCE_BOUNDARY,
+                        "uncertain": UNCERTAIN_STATEMENT,
+                        "answer_pattern": answer_pattern(facet),
                         "topic": body.topic_id,
                         "versions": versions,
                         "area": body.filters.area,
@@ -166,13 +205,17 @@ def answer(body: QuestionRequest) -> QuestionResponse:
                 .mappings()
                 .all()
             )
-            complete = False
+            related_ids, supported_ids = set(), set()
             for row in rows:
                 citation = verified_citation(row)
                 if citation:
                     citations[citation.passage_id] = citation
-                    complete |= row["complete"]
-            if complete:
+                    related_ids.add(citation.passage_id)
+                    if row["complete"]:
+                        supported_ids.add(citation.passage_id)
+            if related_ids:
+                coverage.append(supported_ids or related_ids)
+            if supported_ids:
                 confirmed += 1
             else:
                 gaps.append(f"Não consta confirmação completa para: {facet}.")
@@ -192,7 +235,11 @@ def answer(body: QuestionRequest) -> QuestionResponse:
         response.gaps.append("Não consta evidência nas versões elegíveis para a data e os filtros informados.")
     if passages and get_settings().bedrock_model_id:
         try:
-            response.claims = generate_claims(body, passages)
+            generated = generate_claims(body, passages)
+            selected = {c.passage_id for claim in generated for c in claim.citations}
+            if any(not selected.intersection(evidence) for evidence in coverage):
+                raise ValueError("Seleção do modelo perdeu a evidência de um ponto da pergunta.")
+            response.claims = generated
             response.mode = "generated"
         except Exception:
             # O modelo nunca controla a elegibilidade, IDs, lacunas ou disponibilidade das fontes.
