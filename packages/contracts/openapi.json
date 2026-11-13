@@ -3591,6 +3591,19 @@
             "title": "In Effect",
             "description": "A edição nova é aplicável na data de referência"
           },
+          "to_status": {
+            "type": "string",
+            "enum": [
+              "em_vigor",
+              "fase_declarada",
+              "a_iniciar",
+              "encerrada",
+              "substituida",
+              "sem_confirmacao"
+            ],
+            "title": "To Status",
+            "description": "Situação da edição nova na data de referência"
+          },
           "to_valid_from": {
             "anyOf": [
               {
@@ -3603,6 +3616,19 @@
             ],
             "title": "To Valid From",
             "description": "Início documentado da edição nova"
+          },
+          "to_valid_until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Valid Until",
+            "description": "Fim documentado da edição nova"
           },
           "note": {
             "anyOf": [
@@ -3646,7 +3672,9 @@
           "after_text",
           "previous_available",
           "in_effect",
+          "to_status",
           "to_valid_from",
+          "to_valid_until",
           "note",
           "before_citations",
           "after_citations"

@@ -28,21 +28,25 @@ REJECTED_PROPOSITION = re.compile(r"^\s*[,\"”']*\s*não\s+(?:procede|é\s+verd
 PREVIOUS_PHASE = re.compile(r"anterior|substituíd", re.I)
 
 
+def is_affirmative(sentence: str, match: re.Match) -> bool:
+    """A declaração vale só se nenhuma negação a governa, antes ou depois do trecho reconhecido."""
+    # Vírgulas podem delimitar um inciso, sem encerrar o alcance de “não”.
+    prefix = re.sub(r",[^,]*,|\([^)]*\)", " ", sentence[: match.start()])
+    prefix = re.split(r"\b(?:mas|porém)\b", prefix, flags=re.I)[-1]
+    # A negação de “confirma/afirma que” governa também verbos coordenados.
+    if UNCONFIRMED_PROPOSITION.search(prefix):
+        return False
+    prefix = re.split(r"\be\b", prefix, flags=re.I)[-1]
+    if NEGATED_SUCCESSION.search(prefix):
+        return False
+    return not REJECTED_PROPOSITION.search(sentence[match.end() :])
+
+
 def affirmative_successions(header):
     for sentence in re.split(r"(?<=[.!?;])\s+", header):
         for declaration in SUCCESSION.finditer(sentence):
-            # Vírgulas podem delimitar um inciso, sem encerrar o alcance de “não”.
-            prefix = re.sub(r",[^,]*,|\([^)]*\)", " ", sentence[: declaration.start()])
-            prefix = re.split(r"\b(?:mas|porém)\b", prefix, flags=re.I)[-1]
-            # A negação de “confirma/afirma que” governa também verbos coordenados.
-            if UNCONFIRMED_PROPOSITION.search(prefix):
-                continue
-            prefix = re.split(r"\be\b", prefix, flags=re.I)[-1]
-            if NEGATED_SUCCESSION.search(prefix):
-                continue
-            if REJECTED_PROPOSITION.search(sentence[declaration.end() :]):
-                continue
-            yield declaration
+            if is_affirmative(sentence, declaration):
+                yield declaration
 
 
 @dataclass

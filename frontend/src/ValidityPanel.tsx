@@ -85,9 +85,13 @@ function DocumentCard({ document, onOpen }: { document: DocumentValidity; onOpen
 }
 
 function ChangeCard({ change, reference, onOpen }: { change: VersionChange; reference: string; onOpen: (c: Citation) => void }) {
-  const situation = change.in_effect
-    ? `a versão ${change.to_version} é a aplicável em ${br(reference)}.`
-    : `a versão ${change.to_version} ainda não se aplica em ${br(reference)}${change.to_valid_from ? `; começa em ${br(change.to_valid_from)}` : ""}.`;
+  const to = `a versão ${change.to_version}`;
+  const date = br(reference);
+  const situation = change.in_effect ? `${to} é a aplicável em ${date}.`
+    : change.to_status === "a_iniciar" ? `${to} ainda não se aplica em ${date}; começa em ${br(change.to_valid_from)}.`
+    : change.to_status === "encerrada" ? `${to} teve a vigência encerrada em ${br(change.to_valid_until)} e não se aplica em ${date}.`
+    : change.to_status === "substituida" ? `${to} já foi substituída por edição posterior e não se aplica em ${date}.`
+    : `${to} não tem aplicação confirmada em ${date}.`;
   return <article className="change">
     <h4>{change.code}: {change.summary}</h4>
     <p className="change-values"><span>v{change.from_version}: {change.before_text}</span> → <span>v{change.to_version}: {change.after_text}</span></p>

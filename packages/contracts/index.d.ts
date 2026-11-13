@@ -1119,10 +1119,21 @@ export interface components {
              */
             in_effect: boolean;
             /**
+             * To Status
+             * @description Situação da edição nova na data de referência
+             * @enum {string}
+             */
+            to_status: "em_vigor" | "fase_declarada" | "a_iniciar" | "encerrada" | "substituida" | "sem_confirmacao";
+            /**
              * To Valid From
              * @description Início documentado da edição nova
              */
             to_valid_from: string | null;
+            /**
+             * To Valid Until
+             * @description Fim documentado da edição nova
+             */
+            to_valid_until: string | null;
             /** Note */
             note: string | null;
             /** Before Citations */

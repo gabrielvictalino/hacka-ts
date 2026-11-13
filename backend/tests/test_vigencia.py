@@ -279,8 +279,30 @@ def test_version_change_follows_reference_date(reader, topic, monkeypatch):
     [before] = validity(reader, topic, "2026-07-10")["changes"]
     # Antes do início da sucessora, a mudança não pode ser apresentada como concluída.
     assert not before["in_effect"] and before["to_valid_from"] == "2026-08-03" and before["to_version_id"] == new
+    assert before["to_status"] == "a_iniciar"
     [after] = validity(reader, topic, "2026-11-13")["changes"]
-    assert after["in_effect"]
+    assert after["in_effect"] and after["to_status"] == "em_vigor"
+    # Depois do fim, a edição nova não é anunciada como futura.
+    [ended] = validity(reader, topic, "2028-02-04")["changes"]
+    assert not ended["in_effect"] and ended["to_status"] == "encerrada" and ended["to_valid_until"] == "2028-02-03"
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "A afirmação de que prevalece a NG_907 não procede.",
+        "Não se confirma, nesta revisão, que prevalece a NG_907.",
+        "Em divergência, nunca prevalece a NG_907.",
+        "Este anexo não prevalece a NG_907.",
+    ],
+)
+def test_rejected_precedence_is_not_presented(reader, topic, sentence):
+    ingest(topic, [header("NG_907", "1.0.0", "Vigente", "01/01/2026 a 31/12/2027"), "1. Regra geral."])
+    ingest(
+        topic,
+        [header("PX_907-001", "1.0.0", "Vigente", "01/02/2026 a 31/12/2027"), f"2.2. {sentence}"],
+    )
+    assert document(validity(reader, topic, "2026-11-13"), "PX_907-001")["precedence"] == []
 
 
 def test_upcoming_notice_uses_nearest_future_start(reader, topic):

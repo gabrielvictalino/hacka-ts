@@ -268,7 +268,9 @@ class VersionChange(Contract):
     after_text: str
     previous_available: bool = Field(description="O PDF da edição anterior consta do tema")
     in_effect: bool = Field(description="A edição nova é aplicável na data de referência")
+    to_status: ValidityStatus = Field(description="Situação da edição nova na data de referência")
     to_valid_from: date | None = Field(description="Início documentado da edição nova")
+    to_valid_until: date | None = Field(description="Fim documentado da edição nova")
     note: str | None
     before_citations: list[Citation]
     after_citations: list[Citation] = Field(min_length=1)

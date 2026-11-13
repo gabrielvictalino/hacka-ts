@@ -19,7 +19,7 @@ from app.document_parser import CODE
 from app.fatos.curadoria import resolve_source
 from app.questions import CITATION_COLUMNS, CITATION_JOINS, verified_citation
 from app.vigencia.catalogo import CHANGES, CuratedChange
-from app.vigencia.situacao import PREVIOUS_PHASE, ready_versions, version_states
+from app.vigencia.situacao import PREVIOUS_PHASE, is_affirmative, ready_versions, version_states
 
 LAYER_ORDER = (
     "norma geral",
@@ -30,7 +30,6 @@ LAYER_ORDER = (
     "fundamentação de decisão",
 )
 PRECEDENCE = re.compile(rf"\bprevalece(?:m|rá)?\s+(?:a|o)\s+(?P<code>{CODE})", re.I)
-NEGATION = re.compile(r"\b(?:não|nunca|jamais|nem)\b", re.I)
 
 
 def _br(value: date | None) -> str:
@@ -153,7 +152,8 @@ def _precedence(connection, topic_id, states, documents_by_code) -> dict:
     ):
         for sentence in re.split(r"(?<=[.!?;])\s+", " ".join(row["excerpt"].split())):
             for match in PRECEDENCE.finditer(sentence):
-                if NEGATION.search(sentence[: match.start()]):
+                # Mesmas proteções da sucessão: negação antes, inciso ou rejeição depois do código.
+                if not is_affirmative(sentence, match):
                     continue
                 code = match["code"]
                 if code.casefold() == (row["code"] or "").casefold():
@@ -204,7 +204,9 @@ def _changes(connection, topic_id, ready, states) -> list[VersionChange]:
                 previous_available=from_id is not None,
                 # A mudança só vale na data em que a edição nova é aplicável.
                 in_effect=states[to_id].applicable,
+                to_status=states[to_id].status,
                 to_valid_from=ready[to_id]["valid_from"],
+                to_valid_until=ready[to_id]["valid_until"],
                 note=change.note,
                 before_citations=before,
                 after_citations=after,
