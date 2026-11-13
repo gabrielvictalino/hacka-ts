@@ -4,85 +4,78 @@ Atualizado em 13/11/2026. Trabalho da issue #12 (Consulta e Gestão no React).
 
 ## Branch e commits
 
-- Branch local `feat/12-consulta-gestao-react`, criada de `origin/dev` `19d2712`. **Sem push** e sem PR.
-- `ef20264` `feat(frontend): integra Consulta e Gestão com upload e evidência (#12)`.
-- `8d52043` `docs(kiro): registra steering e handoff da #12`.
-- Correções da revisão final e esta atualização do handoff em commits posteriores (ver `git log origin/dev..`).
+Branch `feat/12-consulta-gestao-react`, criada de `origin/dev` `19d2712` e atualizada por merge com `origin/dev` `7db0c8b`, que já contém a #15 (PR #33). PR em rascunho para `dev`. Ver `git log origin/dev..`.
 
-## Revisão final do diff
-
-- Só arquivos de `frontend/src`, `.kiro/steering` e `docs/handoff-kiro.md`. Nenhuma mudança no backend, nos contratos, nas migrações ou nas dependências.
-- Corrigido na revisão: a página tinha perdido o `<h1>`; o status `divergent` (previsto no contrato, ainda não emitido) seria rotulado como "trechos que não confirmam"; "Tentar novamente" deixava falha de rede sem mensagem.
-- Mudança intencional de comportamento: a lista "Temas do acervo" saiu da tela inicial. Os temas continuam visíveis nos seletores de Consulta e Gestão, e a Gestão lista os documentos por tema.
+| Commit | Conteúdo |
+| --- | --- |
+| `ef20264` | `feat(frontend)`: Consulta e Gestão com upload e evidência |
+| `8d52043` | `docs(kiro)`: steering e handoff |
+| `4229ffc` | `fix(frontend)`: título `<h1>`, status `divergent` e falha de rede no "Tentar novamente" |
+| `e5ac359` | `docs(kiro)`: handoff com ambiente local e revisão |
+| `af148d0` | `chore(ambiente)`: `scripts/dev-local.sh` e `docs/ambiente-sem-docker.md` |
+| merge | `origin/dev` (#15), com resolução dos conflitos previstos |
+| `fix(ambiente)` | `stop` do ambiente local passa a encerrar o grupo de processos |
 
 ## O que mudou
 
 | Arquivo | Mudança |
 | --- | --- |
-| `frontend/src/main.tsx` | Navegação Consulta/Gestão. Identidade de `/eu`, sem formulário de login; o SSO simulado só oferece as contas fictícias. A aba Gestão só aparece com `documents:ingest`. As áreas ficam montadas e só são ocultadas, preservando a resposta da Consulta. "Ver para" agrupado na Consulta, com aviso de que não altera permissões |
-| `frontend/src/ManagementPanel.tsx` (novo) | Upload individual ou em lote (`POST /api/documents/batch`), resultado por arquivo (enfileirado, duplicado, inválido), lista de versões do tema com código, título, versão, tipo, fase, vigência documentada, estado e progresso, atualização automática enquanto houver fila, motivo da falha, "Tentar novamente" (`POST /api/documents/{id}/retry`), "Abrir PDF original" e criação de tema (`POST /api/topics`) |
-| `frontend/src/QuestionPanel.tsx` | Resposta primeiro: situação, aviso curto de geração indisponível (`notice`), afirmações com a fonte logo abaixo. Sem sustentação completa, as lacunas aparecem antes dos trechos, que ficam identificados como relacionados. Metadados depois. Registra a visão escolhida no resultado |
-| `frontend/src/app.css` (novo) | Estilos da navegação e da Gestão, em arquivo próprio para não colidir com o final de `style.css` |
+| `frontend/src/main.tsx` | Navegação Consulta/Gestão. Identidade de `/eu`, sem formulário de login; o SSO simulado só oferece contas fictícias. A aba Gestão aparece com `documents:ingest` ou `alerts:read-details`; o upload exige a primeira e o painel de divergências da #15, a segunda. As áreas ficam montadas e só são ocultadas, preservando a resposta da Consulta. "Ver para" agrupado na Consulta, com aviso de que não altera permissões |
+| `frontend/src/ManagementPanel.tsx` (novo) | Upload individual ou em lote, resultado por arquivo (enfileirado, duplicado, inválido), versões do tema com código, título, versão, tipo, fase, vigência documentada, estado e progresso, atualização automática enquanto houver fila, motivo da falha, "Tentar novamente", "Abrir PDF original" e criação de tema |
+| `frontend/src/QuestionPanel.tsx` | Resposta primeiro: situação, aviso curto de geração indisponível (`notice`), aviso curto de divergência (#15), afirmações com a fonte logo abaixo. Em respostas `partial` e `insufficient`, as lacunas aparecem antes dos trechos, identificados como relacionados. Metadados depois. Registra a visão escolhida |
+| `frontend/src/app.css` (novo) | Estilos da navegação e da Gestão, separados de `style.css` |
+| `scripts/dev-local.sh`, `docs/ambiente-sem-docker.md` (novos) | Ambiente local sem Docker com PostgreSQL 16 exclusivo de desenvolvimento, caminhos e portas configuráveis e recuperação |
+| `docs/desenvolvimento.md` | Ponteiro para o ambiente sem Docker |
 
-Nenhuma rota, contrato ou permissão do backend foi alterado.
+Nenhuma rota, contrato, migração ou dependência foi alterado pela #12. A lista "Temas do acervo" saiu da tela inicial; os temas seguem visíveis nos seletores e na Gestão.
 
-## Validação executada
+## Integração com a #15
+
+A PR #33 entrou na `dev` antes desta PR. O merge conflitou só nos dois arquivos previstos; `style.css`, `ValidityPanel.tsx` e `desenvolvimento.md` se fundiram sozinhos.
+
+- `QuestionPanel.tsx`: ordem nova mantida, com `<DivergenceNotices notices={result.divergence_notices ?? []} />` logo após o aviso de geração.
+- `main.tsx`: estrutura nova mantida, com `DivergencePanel` **só na área de Gestão**.
+
+A posição segue a #15 ("aviso curto na Consulta e os detalhes completos apenas na Gestão, respeitando o perfil da sessão") e a especificação (D13 e a tabela Consulta × Gestão). Hoje `documents:ingest` e `alerts:read-details` vêm juntas, só no perfil `gestao` (`backend/app/auth.py`); a aba considera as duas para não depender desse acoplamento.
+
+## Validação executada (árvore integrada)
 
 | Verificação | Resultado |
 | --- | --- |
 | `npm run build` (`tsc --noEmit` + Vite) | Passa |
 | Contratos: export OpenAPI e `contracts:generate` | Sem diferença |
 | `ruff check` / `ruff format --check` | Passam |
-| Migrações `upgrade heads` → `downgrade base` → `upgrade heads` em PostgreSQL 16.2 local | `0004 (head)` |
-| `pytest backend/tests` contra PostgreSQL real | **290 passed**, código 0 |
-| Roteiro de API pelo proxy do Vite, com acervo importado e fatos publicados | 25/25 verificações |
-| Interface no Chromium 131 headless (Playwright), desktop 1280×900 e celular 375×740 | 29/29 verificações |
+| `pytest backend/tests` contra PostgreSQL 16.2 local | **315 passed** (290 anteriores + 25 da #15), código 0 |
+| Roteiro de API pelo proxy do Vite, com acervo e fatos publicados | 25/25 |
+| Interface no Chromium 131 headless (Playwright), desktop 1280×900 e celular 375×740 | **35/35** |
+| `scripts/dev-local.sh`: `bash -n`, `shellcheck` 0.10.0 e execução do zero em estado isolado | Sem avisos; migrações, 290 testes, 13/13 versões e 59 fatos publicados; `stop` sem processos restantes |
 
-Repetido após as correções da revisão final, com os mesmos resultados (290 testes; 25/25; 29/29).
+A interface cobre: ausência de formulário de login; abas por permissão; AC-01 com fonte `NG_111 · 3.0.0 · p. 2 · 4.3.1` logo abaixo; PDF em `#page=2`; foco no painel de evidência e retorno; resposta preservada ao trocar de área; upload em lote; falha de PDF sem texto com motivo; atualização automática; "Tentar novamente"; teclado; empregado sem Gestão e com 403; "Ver para" sem conceder upload; celular sem rolagem horizontal; AC-03 completo só na Gestão, com as duas fontes e a precedência; aviso curto do AC-03 na Consulta, antes das afirmações; sem erros no console (exceto o 401 esperado de `/eu` sem sessão).
 
-O roteiro de interface cobre: ausência de formulário de login; abas por permissão; AC-01 sustentado com fonte `NG_111 · 3.0.0 · p. 2 · 4.3.1` logo abaixo; abertura do PDF em `#page=2` com a sessão; foco no painel de evidência e retorno; resposta preservada ao ir e voltar da Gestão; upload em lote com resultado por arquivo; falha de PDF sem texto com motivo; atualização automática até "Pronto para consulta"; "Tentar novamente"; ativação da aba pelo teclado; empregado sem aba nem área de upload e com 403 na API; "Ver para" registrado no resultado sem conceder upload; sem rolagem horizontal no celular; sem erros no console (exceto o 401 esperado de `/eu` sem sessão).
+**Não verificado:** aviso de geração indisponível com Bedrock configurado (sem chamadas AWS nos testes); leitores de tela reais; navegadores além do Chromium; a CI do GitHub (usa Compose, não este ambiente).
 
-**Não verificado:** o aviso de geração indisponível com Bedrock configurado (os testes não habilitaram chamadas AWS; o texto vem de `notice`, sem lógica nova); leitores de tela reais; navegadores além do Chromium.
+## Ambiente do Kiro usado
 
-## Compatibilidade com a PR #33 (`feat/15-divergencia-ac03`, aberta)
-
-Um merge de teste, feito numa worktree descartável e já desfeito, conflita só em dois arquivos. `style.css` e `ValidityPanel.tsx` se fundem sozinhos. A resolução abaixo compila:
-
-- `QuestionPanel.tsx`: manter a ordem nova e inserir `<DivergenceNotices notices={result.divergence_notices ?? []} />` logo após a linha do `result.notice`.
-- `main.tsx`: manter a estrutura nova e renderizar `DivergencePanel` **dentro da área de Gestão**, após o `ManagementPanel`, com a condição `identity.permissions.includes("alerts:read-details")`.
-
-A posição segue a especificação, não só a compilação: a #15 pede "aviso curto na Consulta e os detalhes completos apenas na Gestão, respeitando o perfil da sessão", e a especificação (D13 e a tabela Consulta × Gestão) diz o mesmo. O aviso curto da Consulta é o `DivergenceNotices` que a PR #33 já põe em `QuestionPanel` e `ValidityPanel`.
-
-**Ressalva de permissão:** a aba Gestão aparece com `documents:ingest`, e o painel exige `alerts:read-details`. Hoje as duas vêm juntas, só no perfil `gestao` (`backend/app/auth.py`). Se forem separadas, mostrar a aba para quem tiver qualquer uma das duas e renderizar `ManagementPanel` só com `documents:ingest`.
-
-## Ambiente do Kiro usado (específico desta máquina, fora do repositório)
-
-Versão portátil no repositório: [`scripts/dev-local.sh`](../scripts/dev-local.sh) e [`docs/ambiente-sem-docker.md`](ambiente-sem-docker.md), com preparação reproduzível do PostgreSQL, caminhos configuráveis (`IPBOT_STATE_DIR`, `IPBOT_DB`, portas) e recuperação. Validada do zero num estado isolado: migrações, 290 testes, acervo com 13/13 versões e 59 fatos publicados.
-
-Nesta máquina há também uma cópia específica em `/kiro/.tools/` (`ipbot-dev.sh`, `LEIA-ME.md`), que ainda serve o ambiente em uso:
+Versão portátil: [`scripts/dev-local.sh`](../scripts/dev-local.sh) e [`docs/ambiente-sem-docker.md`](ambiente-sem-docker.md). Nesta máquina há uma cópia específica em `/kiro/.tools/` (`ipbot-dev.sh`, `LEIA-ME.md`), que serve o ambiente em uso:
 
 ```sh
 /kiro/.tools/ipbot-dev.sh start | status | stop   # PostgreSQL, worker, API e frontend
 ```
 
-Persistência verificada: `/kiro` e a pasta pessoal ficam no disco raiz do servidor (XFS) e persistem entre comandos e reconexões; `/tmp` e `/dev/shm` são apagados ao reiniciar. Os serviços sobrevivem ao fim de cada comando, mas não voltam sozinhos após um reboot. **Não confirmado** se a máquina e o disco sobrevivem ao fim da sessão ou do evento (conta AWS do evento com limpeza automática). O GitHub é o único lugar garantido para o código.
-
-
 - Linux na AWS, sem Docker nem `sudo`. As worktrees do computador anterior não estão acessíveis aqui; não foram transportadas.
-- PostgreSQL 16.2 dos binários do pacote Python `pgserver==0.1.4`, numa venv de ferramentas fora do repositório. Cluster exclusivo, só em `127.0.0.1:55432`, com bancos `ipbot_dev` (suíte de testes) e `ipbot_e2e` (acervo importado, arquivos de teste enviados pela interface e fatos publicados). Credenciais aleatórias em arquivo `600` fora do repositório. Configurado com `dynamic_shared_memory_type = mmap`, porque esta máquina limpa `/dev/shm` ao fim de cada sessão.
-- Chromium do Playwright 1.49.1 com bibliotecas gráficas e fontes DejaVu extraídas de RPMs oficiais para uma pasta local (sem instalar no sistema).
-- Estado dos serviços: conferir com `/kiro/.tools/ipbot-dev.sh status`. O banco preserva os dados ao parar.
+- PostgreSQL 16.2 dos binários de `pgserver==0.1.4`, só em `127.0.0.1:55432`, bancos `ipbot_dev` (testes) e `ipbot_e2e` (acervo, fatos e arquivos de teste enviados pela interface). Credenciais aleatórias em arquivo `600` fora do repositório. `mmap` para memória compartilhada, porque a máquina limpa `/dev/shm` ao fim de cada sessão.
+- Chromium do Playwright 1.49.1 com bibliotecas e fontes extraídas de RPMs oficiais para uma pasta local.
+- Persistência: `/kiro` e a pasta pessoal ficam no disco raiz (XFS) e persistem entre comandos e reconexões; `/tmp` e `/dev/shm` são apagados ao reiniciar. Os serviços não voltam sozinhos após reboot. **Não confirmado** se a máquina sobrevive ao fim da sessão ou do evento (conta AWS do evento com limpeza automática). O GitHub é o único lugar garantido para o código.
 
 ## Pendências confirmadas
 
-- Abrir a PR da #12 para `dev` quando autorizado. Antes, atualizar com `origin/dev`.
-- Se a PR #33 entrar antes, aplicar a resolução descrita acima.
-- Observações do backend da consulta (#10), fora do escopo da #12, sem alteração:
-  - AC-01: o item 4.3.1 e o 8.1.2 aparecem entre as afirmações, mas o Anexo G vem em primeiro.
+- Revisão humana e CI da PR; sair de rascunho só após aprovação. Merge não autorizado ainda.
+- Observações do backend da consulta (#10), fora do escopo da #12:
+  - AC-01: os itens 4.3.1 e 8.1.2 estão entre as afirmações, mas o Anexo G vem em primeiro.
   - AC-13 (aluguel do coworking com Férias selecionado): status `partial`, com trechos de Férias como afirmações; a matriz espera evidência insuficiente. A lacuna é informada corretamente.
-- Os rótulos que envolvem `select` têm nome acessível que inclui as opções (padrão já existente no app). Avaliar trocar por `<label htmlFor>` em uma revisão de acessibilidade.
-- A branch `fix/10-integrar-fatos-curados` (com conflito em `backend/app/main.py`) existe só no computador anterior. Não foi transportada, por decisão do usuário.
+- Rótulos que envolvem `select` têm nome acessível que inclui as opções (padrão existente). Avaliar `<label htmlFor>` numa revisão de acessibilidade.
+- A branch `fix/10-integrar-fatos-curados` (conflito em `backend/app/main.py`) existe só no computador anterior; não foi transportada, por decisão do usuário.
 
 ## Próximo passo
 
-Revisar o diff da #12 e autorizar o push e a abertura da PR. Depois, revisar a PR #33 ou atacar as observações de AC-01 e AC-13 em uma issue de consulta.
+Acompanhar a CI e a revisão da PR da #12. Em seguida, tratar AC-01 e AC-13 numa issue da consulta ou seguir para a #16 (validação integrada e CI de frontend e backend).
