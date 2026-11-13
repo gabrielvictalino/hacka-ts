@@ -365,3 +365,55 @@ def test_negated_precedence_is_not_presented(client, topic):
     (divergence,) = details(client, topic)["divergences"]
     assert divergence["precedence"] is None
     assert any("Precedência não confirmada" in item for item in divergence["missing_information"])
+
+
+def legacy_blocks(topic, code, page, cut_after):
+    """Regrava a página como o worker da fundação: blocos sem `section`, cortados em posição fixa."""
+    from uuid import uuid4
+
+    with get_engine().begin() as connection:
+        page_id, page_text = connection.execute(
+            text("""SELECT p.id, p.text FROM pages p JOIN document_versions v ON v.id=p.version_id
+                JOIN documents d ON d.id=v.document_id
+                WHERE v.topic_id=:topic AND d.code=:code AND p.physical_page=:page"""),
+            {"topic": topic, "code": code, "page": page},
+        ).one()
+        cut = page_text.index(cut_after) + len(cut_after)
+        connection.execute(text("DELETE FROM passages WHERE page_id=:id"), {"id": page_id})
+        blocks = [page_text[:cut].strip(), page_text[cut:].strip()]
+        for ordinal, excerpt in enumerate(blocks):
+            connection.execute(
+                text("INSERT INTO passages(id, page_id, ordinal, excerpt) VALUES (:id, :page, :ordinal, :excerpt)"),
+                {"id": uuid4(), "page": page_id, "ordinal": ordinal, "excerpt": excerpt},
+            )
+        return blocks
+
+
+def test_legacy_block_split_between_item_and_quote_keeps_the_evidence(client, topic):
+    acervo(topic)
+    blocks = legacy_blocks(topic, "PX_1111-001", 3, "8.4.2.")
+    assert blocks[0].endswith("8.4.2.") and blocks[1].startswith("Se a solicitação")
+    (divergence,) = details(client, topic)["divergences"]
+    assert divergence["status"] == "confirmed"
+    procedure = divergence["guidances"][1]["citation"]
+    assert procedure["section"] == "8.4.2" and "no dia seguinte à aprovação" in procedure["excerpt"]
+    opened = client.get(f"/api/citations/{procedure['passage_id']}").json()
+    assert opened["excerpt"] == blocks[1] and opened["physical_page"] == 3
+
+
+def test_legacy_block_under_another_item_is_still_rejected(client, topic):
+    moved = """8.4.2. Cabe à GGC registrar o aviso.
+8.4.3. Se a solicitação foi aprovada com menos de 35 dias para o início, a GGC
+emite o aviso no dia seguinte à aprovação."""
+    acervo(topic, px_notice=moved)
+    legacy_blocks(topic, "PX_1111-001", 3, "8.4.3.")
+    (divergence,) = details(client, topic)["divergences"]
+    assert divergence["status"] == "possible"
+
+
+def test_precedence_rejected_after_the_quote_is_not_presented(client, topic):
+    rejected = "2.2. A declaração “Em divergência, prevalece a NG_111.” não procede."
+    acervo(topic, precedence=rejected)
+    (divergence,) = details(client, topic)["divergences"]
+    assert divergence["precedence"] is None
+    assert any("Precedência não confirmada" in item for item in divergence["missing_information"])

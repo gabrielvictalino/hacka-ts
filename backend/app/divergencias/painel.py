@@ -19,7 +19,7 @@ from app.fatos.catalogo import Source
 from app.fatos.curadoria import find_quote
 from app.questions import CITATION_COLUMNS, CITATION_JOINS, verified_citation
 from app.vigencia.painel import PRECEDENCE
-from app.vigencia.situacao import is_affirmative, version_states
+from app.vigencia.situacao import REJECTED_PROPOSITION, is_affirmative, version_states
 
 NOT_APPLICABLE = {"a_iniciar", "encerrada", "substituida"}
 STATUS_TEXT = {
@@ -74,14 +74,41 @@ def _cite(connection, edition, source: Source) -> tuple[Citation | None, str | N
         .all()
     )
     for row in rows:
+        if row["section"] is None:
+            continue
         literal = find_quote(row["excerpt"], source.quote)
-        if not literal:
-            continue
-        if row["section"] is None and _item_before(row["excerpt"], row["excerpt"].index(literal)) != source.item:
-            continue
-        if citation := verified_citation(row):
+        if literal and (citation := verified_citation(row)):
             return citation.model_copy(update={"excerpt": literal, "section": source.item}), None, row["excerpt"]
+    legacy = [row for row in rows if row["section"] is None]
+    if legacy:
+        cited = _cite_legacy(legacy, source)
+        if cited:
+            return cited
     return None, f"{_label(source)}: trecho revisado não encontrado no item publicado.", None
+
+
+def _cite_legacy(rows, source: Source):
+    """Trechos do worker da fundação são blocos de tamanho fixo que podem separar o item da frase.
+
+    O item e a frase são validados no texto integral da página; a citação usa o bloco persistido em que a
+    frase começa, preservando o ID já publicado.
+    """
+    page = rows[0]["page_text"]
+    literal = find_quote(page, source.quote)
+    if not literal:
+        return None
+    start = page.index(literal)
+    if _item_before(page, start) != source.item:
+        return None
+    cursor = 0
+    for row in rows:
+        offset = page.find(row["excerpt"], cursor)
+        if offset < 0:
+            continue
+        cursor = offset + len(row["excerpt"])
+        if offset <= start < cursor and (citation := verified_citation(row)):
+            return citation.model_copy(update={"excerpt": literal, "section": source.item}), None, page
+    return None
 
 
 def _affirms_precedence(context: str, literal: str, code: str) -> bool:
@@ -89,6 +116,10 @@ def _affirms_precedence(context: str, literal: str, code: str) -> bool:
     quote = " ".join(literal.split())
     for sentence in re.split(r"(?<=[.!?;])\s+(?=[^”\"'])", " ".join(context.split())):
         if quote not in sentence:
+            continue
+        # A rejeição pode vir depois da frase citada, além da pontuação que a fecha.
+        after = sentence[sentence.index(quote) + len(quote) :]
+        if REJECTED_PROPOSITION.search(re.sub(r"^[\s.;:!?”\"'»)]+", " ", after)):
             continue
         for match in PRECEDENCE.finditer(sentence):
             if match["code"].casefold() == code.casefold() and is_affirmative(sentence, match):
