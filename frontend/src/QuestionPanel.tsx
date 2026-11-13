@@ -28,11 +28,12 @@ export function QuestionPanel({ topics }: { topics: Topic[] }) {
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError("");
     try {
+      const requestedCalculation = buildCalculation(calculation);
       const response = await fetch("/perguntar", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ topic_id: topic || topics[0]?.id, question,
-          perspective: perspective || null, reference_date: date || null,
-          filters: { area: area.trim() || null }, calculation: buildCalculation(calculation) }),
+          ...(requestedCalculation ? {} : { perspective: perspective || null }), reference_date: date || null,
+          filters: { area: area.trim() || null }, calculation: requestedCalculation }),
       });
       if (!response.ok) {
         const body = await response.json();
@@ -54,13 +55,16 @@ export function QuestionPanel({ topics }: { topics: Topic[] }) {
       <label>Pergunta<textarea required maxLength={4000} value={question} disabled={busy}
         onChange={e => setQuestion(e.target.value)} placeholder="Qual o prazo para solicitar férias?" /></label>
       <div className="query-filters">
-        <label>Perspectiva<select value={perspective} disabled={busy} onChange={e => setPerspective(e.target.value as Perspective)}>
-          <option value="">Todas</option><option value="deadline">Prazos</option><option value="value">Valores</option>
+        <label>Perspectiva<select value={calculation.rule ? "" : perspective} disabled={busy || !!calculation.rule}
+          aria-describedby={calculation.rule ? "calculation-perspective-help" : undefined}
+          onChange={e => setPerspective(e.target.value as Perspective)}>
+          <option value="">{calculation.rule ? "Definida pela regra" : "Todas"}</option><option value="deadline">Prazos</option><option value="value">Valores</option>
           <option value="obligation" disabled>Obrigações · em breve</option><option value="risk" disabled>Riscos · em breve</option>
         </select></label>
         <label>Área<input value={area} maxLength={200} disabled={busy} onChange={e => setArea(e.target.value)} placeholder="Ex.: GGC" /></label>
         <label>Data de referência<input type="date" value={date} disabled={busy} onChange={e => setDate(e.target.value)} /></label>
       </div>
+      {calculation.rule && <p id="calculation-perspective-help">A regra escolhida define os fatos usados no cálculo. A perspectiva será aplicada novamente ao consultar sem cálculo.</p>}
       <CalculationFields value={calculation} onChange={setCalculation} disabled={busy || !topics.length} />
       <button disabled={busy || !topics.length || !question.trim()}>{busy ? "Consultando…" : "Perguntar"}</button>
     </form>

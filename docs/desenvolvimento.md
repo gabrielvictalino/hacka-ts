@@ -340,7 +340,9 @@ A regra explícita define a operação; o texto da pergunta fornece contexto par
 Pedidos com cálculo são dedicados a essa operação, sem executar busca textual para outras perguntas
 no mesmo texto. Para consultar outro ponto, faça um pedido separado sem `calculation`.
 O servidor executa o mesmo motor Python das rotas de regras usando somente fatos curados do
-tema e dos filtros, com todas as fontes em versões elegíveis na data efetiva. Cada citação é
+tema e do filtro de área, com todas as fontes em versões elegíveis na data efetiva.
+A perspectiva textual não filtra os fatos necessários a uma regra explícita, inclusive quando
+um cliente da API envia `perspective` junto de `calculation`. Cada citação é
 reconferida contra a página persistida; sem todos os parâmetros curados elegíveis, retorna
 lacuna e não chama o Bedrock. O cliente não pode enviar resultados, memória ou citações.
 
@@ -361,7 +363,9 @@ campos específicos: valores monetários, tamanho da equipe, faltas, início das
 opcionais e feriados adicionados individualmente. Campos obrigatórios e limites numéricos são
 validados antes do envio. Ao trocar de regra, os parâmetros são limpos; trocar de tema também
 volta para **Sem cálculo**. Regras de orçamento e pagamento de premiações não exigem campos
-adicionais. A pergunta, o tema, a data de referência e os filtros acompanham `calculation`;
+adicionais. Ao escolher uma regra, o seletor de perspectiva é desabilitado e mostra
+**Definida pela regra**; `perspective` é omitido do pedido. A perspectiva anterior é preservada
+para voltar à busca textual. A pergunta, o tema, a data de referência e o filtro de área acompanham `calculation`;
 **Sem cálculo** envia `calculation=null` e mantém a busca textual. O período das férias e a data
 de referência são campos distintos: um alimenta a conta e o outro seleciona as fontes elegíveis.
 

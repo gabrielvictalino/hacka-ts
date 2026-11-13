@@ -47,9 +47,8 @@ def answer_calculation(body: QuestionRequest, eligible_versions, verify) -> Ques
         if not connection.execute(text("SELECT 1 FROM topics WHERE id=:id"), {"id": body.topic_id}).scalar():
             raise HTTPException(404, "Tema não encontrado.")
         versions = set(eligible_versions(connection, body.topic_id, body.reference_date))
-        candidates = list_facts(
-            connection, keys=keys, topic_id=body.topic_id, area=body.filters.area, category=body.perspective
-        )
+        # A regra explícita determina todos os fatos necessários, inclusive de categorias diferentes.
+        candidates = list_facts(connection, keys=keys, topic_id=body.topic_id, area=body.filters.area)
         for fact in candidates:
             verified = []
             for citation in fact.citations:

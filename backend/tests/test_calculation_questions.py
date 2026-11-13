@@ -143,7 +143,7 @@ def test_calculation_fallback_preserves_all_results_sources_and_assumptions(read
     assert {k: v for k, v in fallback.items() if k != "notice"} == {k: v for k, v in baseline.items() if k != "notice"}
 
 
-@pytest.mark.parametrize("restriction", ["expired", "area", "perspective", "quote", "passage", "failed", "other_topic"])
+@pytest.mark.parametrize("restriction", ["expired", "area", "quote", "passage", "failed", "other_topic"])
 def test_calculation_requires_eligible_verified_curated_sources(reader, topic, refund_fact, model, restriction):
     received = model()
     updates = {}
@@ -170,8 +170,6 @@ def test_calculation_requires_eligible_verified_curated_sources(reader, topic, r
             )
         elif restriction == "area":
             updates["filters"] = {"area": "INEXISTENTE"}
-        elif restriction == "perspective":
-            updates["perspective"] = "deadline"
         elif restriction == "other_topic":
             other = uuid4()
             connection.execute(
@@ -202,3 +200,15 @@ def test_client_cannot_supply_calculated_results_or_invalid_parameters(reader, t
         "/perguntar", json={"topic_id": str(topic), "question": "Explique", "calculation": calculation}
     )
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize("perspective", ["deadline", "value", "obligation", "risk"])
+def test_explicit_calculation_ignores_search_perspective(reader, topic, refund_fact, model, perspective):
+    baseline = ask(reader, topic)
+    received = model()
+    result = ask(reader, topic, perspective=perspective)
+    assert result["mode"] == "generated" and result["status"] == "supported"
+    assert result["calculation"] == baseline["calculation"]
+    assert result["claims"] == baseline["claims"]
+    assert result["passages"] == baseline["passages"]
+    assert not result["gaps"] and len(received) == 1
