@@ -47,8 +47,8 @@ def enqueue(connection, topic_id: UUID, filename: str, content: bytes) -> Ingest
     storage_key = f"{digest}.pdf"
     settings.storage_path.mkdir(parents=True, exist_ok=True)
     target = settings.storage_path / storage_key
-    # Reenvios também reparam o armazenamento antes de devolver ou reenfileirar a versão.
-    if not target.is_file():
+    # Restaura originais ausentes ou corrompidos antes de reutilizá-los em qualquer tema.
+    if not target.is_file() or hashlib.sha256(target.read_bytes()).hexdigest() != digest:
         _store_original(target, content)
     if previous:
         if previous["status"] == "failed":

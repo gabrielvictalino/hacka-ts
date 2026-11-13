@@ -34,7 +34,7 @@ services:
 
   migrate:
     <<: *backend
-    command: [alembic, -c, backend/alembic.ini, upgrade, head]
+    command: [alembic, -c, backend/alembic.ini, upgrade, heads]
     depends_on:
       db:
         condition: service_healthy

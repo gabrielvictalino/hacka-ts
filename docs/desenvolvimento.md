@@ -39,7 +39,7 @@ docker compose run --rm --no-deps migrate alembic -c backend/alembic.ini current
 docker compose run --rm --no-deps --user "$(id -u):$(id -g)" migrate alembic -c backend/alembic.ini revision -m "descricao"
 ```
 
-Preencha `upgrade` e `downgrade` da nova revisão antes de aplicá-la. Em banco descartável, é possível testar a reversão com `alembic -c backend/alembic.ini downgrade base`; isso remove as tabelas documentais e seus dados. A CI aplica, reverte e reaplica a migração.
+Preencha `upgrade` e `downgrade` da nova revisão antes de aplicá-la. O serviço `migrate` e a CI usam `upgrade heads` para aplicar todas as revisões, inclusive quando há múltiplos heads. Em banco descartável, é possível testar a reversão com `alembic -c backend/alembic.ini downgrade base`; isso remove as tabelas documentais e seus dados. A CI aplica, reverte e reaplica as migrações.
 
 ## Importação do acervo
 
@@ -70,7 +70,7 @@ O CLI é uma ferramenta administrativa local com acesso direto ao banco. O uploa
 
 O hash SHA-256 por tema evita duplicação, inclusive entre chamadas concorrentes. Reenviar um PDF com falha o recoloca na fila. O worker usa `FOR UPDATE SKIP LOCKED`: múltiplos workers podem compartilhar a fila e uma queda antes do commit devolve o trabalho ao estado anterior. Páginas, trechos e estado `ready` são gravados atomicamente. O estado `processing` fica na transação do worker; observadores veem `queued` até `ready` ou `failed`. Uma página vazia conserva sua posição, mas não gera trecho vazio.
 
-Se o original estiver ausente, o reenvio restaura os bytes por hash antes de reenfileirar a versão com falha, preservando seu ID. Para uma versão já pronta, restaura somente o arquivo e conserva páginas e IDs dos trechos. Se a restauração falhar, a versão não é recolocada na fila. No upload HTTP, abertura da conexão, transação, espera de locks, gravação do PDF e commit executam juntos no threadpool, permitindo que a API continue atendendo outras requisições.
+Antes de reutilizar um original, a ingestão confere seu SHA-256. Se estiver ausente ou corrompido, restaura atomicamente os bytes recebidos, inclusive ao enviar o mesmo PDF para outro tema. O reenvio restaura o arquivo antes de reenfileirar a versão com falha, preservando seu ID. Para uma versão já pronta, restaura somente o arquivo e conserva páginas e IDs dos trechos. Se a restauração falhar, a versão não é recolocada na fila. No upload HTTP, abertura da conexão, transação, espera de locks, gravação do PDF e commit executam juntos no threadpool, permitindo que a API continue atendendo outras requisições.
 
 PDFs cujo texto extraído contém caracteres nulos são marcados como `failed` antes de gravar páginas, com orientação para gerar outra cópia pesquisável. Isso preserva o texto literal dos documentos aceitos e permite que o worker continue processando os próximos arquivos da fila.
 

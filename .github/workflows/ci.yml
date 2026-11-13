@@ -53,7 +53,7 @@ jobs:
           docker compose up -d db
           docker compose run --rm migrate
           docker compose run --rm --no-deps migrate alembic -c backend/alembic.ini downgrade base
-          docker compose run --rm --no-deps migrate alembic -c backend/alembic.ini upgrade head
+          docker compose run --rm --no-deps migrate alembic -c backend/alembic.ini upgrade heads
 
       - name: Validar backend e ingestão com PostgreSQL
         run: |

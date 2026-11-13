@@ -85,11 +85,15 @@ def test_upload_keeps_api_responsive_while_ingestion_waits(management_client, mo
     asyncio.run(scenario())
 
 
-def test_missing_original_is_restored_before_retry(topic):
+@pytest.mark.parametrize("stored_content", [None, b"%PDF-"])
+def test_missing_or_corrupt_original_is_restored_before_retry(topic, stored_content):
     content = make_pdf([f"Original recuperavel {topic}."])
     initial = queue(topic, content)
     path = get_settings().storage_path / f"{hashlib.sha256(content).hexdigest()}.pdf"
-    path.unlink()
+    if stored_content is None:
+        path.unlink()
+    else:
+        path.write_bytes(stored_content)
     assert process_one()
     with get_engine().connect() as connection:
         assert (
@@ -112,7 +116,8 @@ def test_missing_original_is_restored_before_retry(topic):
         )
 
 
-def test_ready_version_restores_original_without_replacing_citations(topic, management_client):
+@pytest.mark.parametrize("stored_content", [None, b"%PDF-"])
+def test_ready_version_restores_original_without_replacing_citations(topic, management_client, stored_content):
     content = make_pdf([f"Preservar citacoes {topic}."])
     initial = queue(topic, content)
     assert process_one()
@@ -128,7 +133,10 @@ def test_ready_version_restores_original_without_replacing_citations(topic, mana
             .all()
         )
     path = get_settings().storage_path / f"{hashlib.sha256(content).hexdigest()}.pdf"
-    path.unlink()
+    if stored_content is None:
+        path.unlink()
+    else:
+        path.write_bytes(stored_content)
     response = management_client.post(
         "/api/documents", data={"topic_id": str(topic)}, files={"file": ("reenvio.pdf", content)}
     )
@@ -151,13 +159,50 @@ def test_ready_version_restores_original_without_replacing_citations(topic, mana
         )
 
 
-def test_restore_failure_does_not_requeue_version(topic, monkeypatch):
+@pytest.mark.parametrize("corruption", ["truncated", "same_size"])
+def test_new_topic_repairs_corrupt_shared_original(topic, corruption):
+    content = make_pdf([f"Original compartilhado {topic}."])
+    initial = queue(topic, content)
+    assert process_one()
+    path = get_settings().storage_path / f"{hashlib.sha256(content).hexdigest()}.pdf"
+    path.write_bytes(content[:10] if corruption == "truncated" else content[:-1] + b"x")
+    new_topic = uuid4()
+    with get_engine().begin() as connection:
+        connection.execute(
+            text("INSERT INTO topics(id, name) VALUES (:id, :name)"),
+            {"id": new_topic, "name": f"test-{new_topic}"},
+        )
+    try:
+        result = queue(new_topic, content)
+        assert result.version_id != initial.version_id
+        assert result.status == "queued" and not result.duplicate
+        assert path.read_bytes() == content
+        assert process_one()
+        with get_engine().connect() as connection:
+            assert (
+                connection.execute(
+                    text("SELECT status FROM document_versions WHERE id=:id"), {"id": result.version_id}
+                ).scalar_one()
+                == "ready"
+            )
+    finally:
+        with get_engine().begin() as connection:
+            connection.execute(text("DELETE FROM document_versions WHERE topic_id=:id"), {"id": new_topic})
+            connection.execute(text("DELETE FROM documents WHERE topic_id=:id"), {"id": new_topic})
+            connection.execute(text("DELETE FROM topics WHERE id=:id"), {"id": new_topic})
+
+
+@pytest.mark.parametrize("stored_content", [None, b"%PDF-"])
+def test_restore_failure_does_not_requeue_version(topic, monkeypatch, stored_content):
     from app import ingestion
 
     content = make_pdf([f"Falha de armazenamento {topic}."])
     result = queue(topic, content)
     path = get_settings().storage_path / f"{hashlib.sha256(content).hexdigest()}.pdf"
-    path.unlink()
+    if stored_content is None:
+        path.unlink()
+    else:
+        path.write_bytes(stored_content)
     assert process_one()
 
     def fail(*args):
