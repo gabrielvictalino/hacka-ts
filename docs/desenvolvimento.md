@@ -207,7 +207,12 @@ citação continua exibindo a condição completa. Uma regra explícita na mesma
 frase pode confirmar a ação excluída da regra geral. Se a exceção acrescenta “quando o prazo
 para cancelar férias é de 5 dias úteis”, essa atribuição é avaliada separadamente dos 45 dias
 da regra geral. A confirmação exige a ação e a medida na regra específica; não transfere o
-número geral para uma exceção sem prazo informado. Qualificadores e condições após a medida
+número geral para uma exceção sem prazo informado. Regras específicas entre parênteses
+balanceados são isoladas antes de analisar as vírgulas da regra externa, inclusive quando a
+exceção antecede a regra geral. A ação e a medida do parêntese são avaliadas juntas, sem
+incorporar o número da regra geral. Parênteses sem atribuição própria ou com informação
+negada não confirmam o ponto. A citação literal conserva todos os parênteses e condições.
+Qualificadores e condições após a medida
 são preservados, como “antecedência mínima de 45 dias corridos do início de gozo” no item 4.3.1
 original. As quebras de linha da extração não interrompem a afirmação. A classificação não
 exige igualdade literal entre o sujeito da frase e a pergunta.

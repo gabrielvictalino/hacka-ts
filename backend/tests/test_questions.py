@@ -645,6 +645,36 @@ def test_exception_qualifier_does_not_hide_explicit_rule_for_requested_action(re
             "r$ 120,00",
             "r$ 900,00",
         ),
+        (
+            "Qual o prazo para cancelar férias?",
+            "Salvo no cancelamento de férias (cujo prazo para cancelar férias é de 5 dias úteis), o prazo de férias é de 45 dias.",
+            "5 dias úteis",
+            "45 dias",
+        ),
+        (
+            "Qual o prazo para cancelar férias?",
+            "O prazo de férias, salvo no cancelamento (cujo prazo para cancelar férias é de 5 dias úteis), é de 45 dias.",
+            "5 dias úteis",
+            "45 dias",
+        ),
+        (
+            "Qual o prazo para cancelar férias?",
+            "Salvo no cancelamento (cujo prazo, para cancelar férias, é de 5 dias úteis), o prazo de férias é de 45 dias.",
+            "5 dias úteis",
+            "45 dias",
+        ),
+        (
+            "Qual o prazo para cancelar férias?",
+            "Salvo no cancelamento (cujo prazo para cancelar férias é de 5 dias úteis (sem alteração da unidade)), o prazo de férias é de 45 dias.",
+            "5 dias úteis",
+            "45 dias",
+        ),
+        (
+            "Qual o valor de cancelamento de locação?",
+            "Salvo no cancelamento (cujo valor de cancelamento de locação é de R$ 120,00), o valor de locação é de R$ 900,00.",
+            "r$ 120,00",
+            "r$ 900,00",
+        ),
     ],
 )
 def test_same_sentence_exception_supplies_own_explicit_measure(reader, topic, question, literal, specific, general):
@@ -670,6 +700,23 @@ def test_same_sentence_exception_supplies_own_explicit_measure(reader, topic, qu
 )
 def test_exception_tail_without_confirmation_does_not_inherit_general_deadline(reader, topic, tail):
     literal = "O prazo de férias é de 45 dias, salvo em caso de cancelamento, " + tail
+    ingest(topic, [literal])
+    result = ask(reader, topic, "Qual o prazo para cancelar férias?")
+    assert result["status"] == "partial" and result["gaps"]
+    assert result["claims"][0]["text"] == literal
+
+
+@pytest.mark.parametrize(
+    "specific",
+    [
+        "cujo prazo para cancelar férias deve ser consultado com a GGC",
+        "cujo prazo para solicitar férias é de 5 dias úteis",
+        "cujo prazo para cancelar férias não é de 5 dias úteis",
+        "comparado ao prazo de férias de 45 dias",
+    ],
+)
+def test_parenthetical_without_own_support_does_not_borrow_general_deadline(reader, topic, specific):
+    literal = f"Salvo no cancelamento de férias ({specific}), o prazo de férias é de 45 dias."
     ingest(topic, [literal])
     result = ask(reader, topic, "Qual o prazo para cancelar férias?")
     assert result["status"] == "partial" and result["gaps"]

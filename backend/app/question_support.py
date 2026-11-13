@@ -62,9 +62,38 @@ EXCEPTION_RULE_BOUNDARY = re.compile(
 RULE_MARKER = re.compile(r"\b(?:prazo|antecedência|valor|custo|preço)\b", re.I)
 
 
+def parenthetical_exception_rules(sentence):
+    """Isola regras com parênteses balanceados antes de procurar vírgulas externas."""
+    stack, spans = [], []
+    for index, character in enumerate(sentence):
+        if character == "(":
+            stack.append(index)
+        elif character == ")" and stack:
+            start = stack.pop()
+            if stack:
+                continue
+            rule = sentence[start + 1 : index]
+            if (
+                EXCLUSION.search(sentence[:start])
+                and RULE_MARKER.search(rule)
+                and (TIME.search(rule) or MONEY.search(rule))
+            ):
+                spans.append((start, index + 1, rule))
+    pieces, rules, previous = [], [], 0
+    for start, end, rule in spans:
+        pieces.append(sentence[previous:start])
+        pieces.append(" ")
+        rules.append(rule)
+        previous = end
+    pieces.append(sentence[previous:])
+    return "".join(pieces), rules
+
+
 def affirmative_scopes(sentence):
     """Separa a regra geral das atribuições explícitas dentro de suas exceções."""
+    sentence, parenthetical = parenthetical_exception_rules(sentence)
     scopes = [affirmative_scope(sentence)]
+    scopes.extend(affirmative_scope(rule) for rule in parenthetical)
     for exclusion in EXCLUSION.finditer(sentence):
         remainder = sentence[exclusion.end() :]
         # A vírgula encerra a condição; “em que” dentro dela não inicia outra regra.
