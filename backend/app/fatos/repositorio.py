@@ -46,7 +46,7 @@ def list_facts(
         return []
     citations = defaultdict(list)
     for row in connection.execute(
-        text("""SELECT c.fact_id, c.passage_id, v.id AS version_id, COALESCE(v.title, d.title) AS title, d.code,
+        text("""SELECT c.fact_id, c.passage_id, v.document_id, v.id AS version_id, COALESCE(v.title, d.title) AS title, d.code,
             v.version, pg.physical_page, COALESCE(c.quote, p.excerpt) AS excerpt, COALESCE(c.item, p.section) AS section
         FROM fact_citations c
         JOIN passages p ON p.id=c.passage_id JOIN pages pg ON pg.id=p.page_id

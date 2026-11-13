@@ -17,6 +17,7 @@ from app.config import get_settings
 from app.contracts import (
     APIError,
     BatchFileResult,
+    Citation,
     DocumentVersion,
     IngestionResult,
     QuestionRequest,
@@ -27,6 +28,7 @@ from app.contracts import (
 from app.db import get_engine, get_migration_config
 from app.fatos.api import router as facts_router
 from app.ingestion import InvalidDocument, enqueue
+from app.questions import answer, citation_by_id
 from app.regras.api import router as rules_router
 
 logger = logging.getLogger(__name__)
@@ -228,10 +230,20 @@ def original(version_id: UUID):
     response_model=QuestionResponse,
     dependencies=[Depends(current_identity)],
     tags=["query"],
-    responses={501: {"description": "Contrato reservado; consulta implementada em issue própria"}},
 )
+@app.post("/perguntar", response_model=QuestionResponse, dependencies=[Depends(current_identity)], tags=["query"])
 def question(body: QuestionRequest):
-    raise HTTPException(501, "Contrato disponível; mecanismo de consulta ainda não implementado.")
+    return answer(body)
+
+
+@app.get(
+    "/api/citations/{passage_id}", response_model=Citation, dependencies=[Depends(current_identity)], tags=["query"]
+)
+def citation(passage_id: UUID):
+    evidence = citation_by_id(passage_id)
+    if evidence is None:
+        raise HTTPException(409, "Trecho não corresponde à página armazenada.")
+    return evidence
 
 
 @app.get(

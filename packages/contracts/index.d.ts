@@ -420,6 +420,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/perguntar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Question */
+        post: operations["question_perguntar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/questions": {
         parameters: {
             query?: never;
@@ -431,6 +448,23 @@ export interface paths {
         put?: never;
         /** Question */
         post: operations["question_api_questions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/citations/{passage_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Citation */
+        get: operations["citation_api_citations__passage_id__get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -503,6 +537,21 @@ export interface components {
         };
         /** Citation */
         Citation: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Document Type */
+            document_type?: string | null;
+            /** Document Layer */
+            document_layer?: string | null;
+            /** Declared Phase */
+            declared_phase?: string | null;
+            /** Valid From */
+            valid_from?: string | null;
+            /** Valid Until */
+            valid_until?: string | null;
             /**
              * Version Id
              * Format: uuid
@@ -765,6 +814,8 @@ export interface components {
         };
         /** QuestionResponse */
         QuestionResponse: {
+            /** Notice */
+            notice?: string | null;
             /**
              * Mode
              * @enum {string}
@@ -1823,6 +1874,41 @@ export interface operations {
             };
         };
     };
+    question_perguntar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ipbot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuestionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     question_api_questions_post: {
         parameters: {
             query?: never;
@@ -1856,12 +1942,38 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description Contrato reservado; consulta implementada em issue própria */
-            501: {
+        };
+    };
+    citation_api_citations__passage_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                passage_id: string;
+            };
+            cookie?: {
+                ipbot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["Citation"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

@@ -10,3 +10,13 @@ button { font: inherit; background: #17645b; color: white; border: none; border-
 button:disabled { opacity: .5; cursor: wait; }
 button:focus-visible { outline: 3px solid #b38530; outline-offset: 3px; }
 [role=alert] { color: #9b2929; }
+
+form label { display: grid; gap: 6px; margin-bottom: 16px; min-width: 0; }
+input, textarea, select { box-sizing: border-box; width: 100%; font: inherit; padding: 10px; border: 1px solid #8ba49c; border-radius: 6px; background: white; color: inherit; }
+textarea { min-height: 110px; resize: vertical; }
+.query-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.claim, .evidence { margin-top: 20px; border-top: 1px solid #d9e4dd; padding-top: 16px; }
+blockquote { white-space: pre-wrap; margin: 12px 0; overflow-wrap: anywhere; }
+small { display: block; overflow-wrap: anywhere; margin-bottom: 16px; }
+a { color: #17645b; }
+@media (max-width: 500px) { main { padding: 28px 12px; } section { padding: 16px; } }

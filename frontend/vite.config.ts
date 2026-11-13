@@ -8,6 +8,7 @@ export default defineConfig({
     proxy: {
       "/auth/callback": process.env.API_PROXY_TARGET ?? "http://localhost:8000",
       "/eu": process.env.API_PROXY_TARGET ?? "http://localhost:8000",
+      "/perguntar": process.env.API_PROXY_TARGET ?? "http://localhost:8000",
       "/api": process.env.API_PROXY_TARGET ?? "http://localhost:8000",
       "/health": process.env.API_PROXY_TARGET ?? "http://localhost:8000",
     },

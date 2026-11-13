@@ -161,7 +161,7 @@ docker compose run --rm --no-deps api python -m app.export_contracts > packages/
 docker compose run --rm --no-deps frontend npm run contracts:generate
 ```
 
-A CI verifica se os arquivos gerados correspondem aos fontes. `POST /api/questions` disponibiliza o contrato e retorna 501 até a implementação da consulta em issue própria. Os endpoints de ingestão estão disponíveis para integrar upload e acompanhamento à tela de Gestão. A interface segue o trabalho de frontend; respostas, sínteses e divergências pertencem aos respectivos cartões.
+A CI verifica se os arquivos gerados correspondem aos fontes. `POST /api/questions` e `POST /perguntar` executam a consulta extrativa autenticada. Os endpoints de ingestão estão disponíveis para integrar upload e acompanhamento à tela de Gestão. A interface inclui consulta e painel de evidência; sínteses e divergências seguem nos respectivos cartões.
 
 ## Validação em ambiente isolado
 
@@ -181,3 +181,96 @@ docker compose -p ipbot-test down -v
 Os testes usam PostgreSQL real e PDFs sintéticos gerados na hora. Cobrem página física após página vazia, trecho literal, reenvio concorrente, falha sem páginas parciais, reprocessamento e acesso por perfil. A ingestão verifica cabeçalhos, edições do mesmo documento, itens longos, cláusulas, progresso visível, recuperação após queda, falha de banco no meio do lote e permissões do SSO para upload, lote, reenvio e criação de temas. A atualização de metadados é testada com versões prontas no schema `0001`, incluindo citações curadas e recuperação transacional após falha. As regressões também verificam atendimento de requisições durante upload bloqueado, restauração de original ausente sem alterar citações, novas migrações e múltiplos heads, perspectiva e área na consulta e os formatos de resposta publicados no OpenAPI. A CI também sobe todos os serviços e aguarda os healthchecks.
 
 Para atualizar dependências Python, edite `backend/requirements.in` e gere o lock com `uv pip compile backend/requirements.in --python-version 3.12 --output-file backend/requirements.txt --upgrade`. O frontend usa `npm ci` e `package-lock.json` versionado.
+
+
+## Perguntas e evidências (#10)
+
+A tela Consulta envia tema, pergunta, perspectiva, área e data para `POST /perguntar`
+(também disponível em `POST /api/questions`). Os mesmos perfis com acesso ao acervo podem consultar.
+A busca usa o índice `tsvector` em português, ranqueia os trechos e preserva seu texto literal.
+O filtro de área exige a presença textual da área no trecho; as perspectivas restringem por
+vocabulário de prazos, valores, obrigações ou riscos. Não há inferência de área ou responsável.
+
+As perguntas são separadas em pontos por `?`, `;`, quebra de linha ou ` e `, com até 12 pontos.
+A classificação `supported` exige evidência para cada ponto da pergunta. A recuperação usa
+expansões de vocabulário; a confirmação usa separadamente a ação e a medida da mesma afirmação.
+Pedir, solicitar e solicitação compartilham uma ação, e prazo e antecedência compartilham um
+marcador temporal. O título da versão fornece o contexto documental (por exemplo, Férias),
+sem substituir a evidência da ação e do número no item. O texto literal apresentado não muda.
+
+Para prazo ou valor, a medida precisa seguir um marcador da mesma ação. Comparações,
+encaminhamentos e frases que misturam ações diferentes continuam parciais: os 45 dias de
+solicitação não confirmam o prazo de cancelamento. Uma ação mencionada somente em uma
+exceção (“salvo”, “exceto”, “com exceção de”) não recebe o prazo ou valor da regra geral.
+A confirmação avalia a oração afirmativa, incluindo exceções iniciais ou intercaladas, e a
+citação continua exibindo a condição completa. Uma regra explícita na mesma frase ou em outra
+frase pode confirmar a ação excluída da regra geral. Se a exceção acrescenta “quando o prazo
+para cancelar férias é de 5 dias úteis”, essa atribuição é avaliada separadamente dos 45 dias
+da regra geral. A confirmação exige a ação e a medida na regra específica; não transfere o
+número geral para uma exceção sem prazo informado. Regras específicas entre parênteses
+balanceados são isoladas antes de analisar as vírgulas da regra externa, inclusive quando a
+exceção antecede a regra geral. A ação e a medida do parêntese são avaliadas juntas, sem
+incorporar o número da regra geral. Parênteses sem atribuição própria ou com informação
+negada não confirmam o ponto. A citação literal conserva todos os parênteses e condições.
+Qualificadores e condições após a medida
+são preservados, como “antecedência mínima de 45 dias corridos do início de gozo” no item 4.3.1
+original. As quebras de linha da extração não interrompem a afirmação. A classificação não
+exige igualdade literal entre o sujeito da frase e a pergunta.
+
+São recuperados até 48 candidatos por ponto e priorizados até oito trechos verificáveis,
+com evidências confirmadas antes das apenas relacionadas. `partial` indica pontos sem
+confirmação completa; `insufficient` indica ausência de trechos verificáveis. As lacunas não
+são preenchidas pelo modelo. O reconhecimento é local e limitado ao vocabulário e às relações
+tratadas pelo extrator; não equivale a uma análise semântica irrestrita. Não há detecção de
+divergências nesta issue.
+
+Só versões `ready` do tema entram na busca. Datas explícitas limitam a elegibilidade; a data de
+referência informada no campo tem prioridade. Uma única data `DD/MM/AAAA` ou `AAAA-MM-DD` na
+pergunta também é reconhecida; várias datas exigem o campo explícito. Sem data, usa-se o dia
+em `America/Recife`. Uma versão futura pode ser consultada escolhendo sua data de vigência.
+A sucessão considera `superseded_by` ou declaração inequívoca `Substitui a v2` / `Substitui a versão
+2.0.0` / `Substitui a NG_111 versão 2.0.0` na primeira página do mesmo documento, com início
+confirmado da sucessora. Quando a declaração inclui um código, ele precisa corresponder ao
+documento substituído. Uma negação que governa a substituição (inclusive “não\nsubstitui”) ou
+rejeita a própria afirmação não estabelece sucessão. Incisos entre vírgulas não encerram
+o alcance de “não se confirma que”; a v2 continua elegível quando a sucessão é incerta.
+Negar outra ação, como “sem alterar os
+procedimentos” depois da versão citada, preserva a sucessão afirmativa. A fase “Versão anterior”
+continua elegível antes do início da sucessora. Não se presume
+substituição por ordem de upload ou maior número da edição. Fases anteriores com aplicabilidade
+incerta são excluídas; sem datas em uma fonte corrente, a interface mostra a ausência do intervalo.
+Regras temporais mais amplas seguem no cartão de vigência.
+
+Cada citação contém documento, ID imutável da versão, ID do trecho, título, versão declarada,
+página física (começando em 1), item/cláusula quando identificado e trecho literal conferido
+contra a página persistida. `GET /api/citations/{passage_id}` resolve a evidência autenticada
+sem aplicar os filtros da nova consulta. `GET /api/documents/{version_id}/file#page=N` abre o
+mesmo PDF, inclusive após a entrada da sucessora. Retornar da evidência mantém a resposta.
+
+### Bedrock opcional
+
+Sem `BEDROCK_MODEL_ID`, nenhuma chamada AWS é feita. Para habilitar, configure esse campo,
+`BEDROCK_REGION` e credenciais AWS pelas variáveis do ambiente (`AWS_ACCESS_KEY_ID`,
+`AWS_SECRET_ACCESS_KEY` e, se necessário, `AWS_SESSION_TOKEN`), com permissão de invocação
+para o modelo escolhido. Não versione credenciais. A integração usa a
+[API Converse oficial](https://docs.aws.amazon.com/boto3/latest/reference/services/bedrock-runtime/client/converse.html).
+
+O modelo só pode selecionar trechos completos recebidos, sem reescrever nem recortar condições
+ou negações. IDs desconhecidos, texto alterado, resposta vazia ou inválida, erro de autenticação,
+indisponibilidade e timeout retornam os trechos locais originais, com um aviso curto.
+O timeout de leitura é `BEDROCK_TIMEOUT_SECONDS` (padrão 5 s, entre 1 e 30), o de conexão
+é 2 s, sem retentativas da invocação. A recuperação no PostgreSQL acontece antes da chamada;
+a geração nunca decide elegibilidade, lacunas ou URLs das fontes. Todos os trechos recuperados
+continuam acessíveis na tela, mesmo quando o modelo seleciona apenas alguns. Antes de aceitar
+a seleção, o backend exige na resposta principal ao menos uma evidência que confirma cada ponto
+confirmado e uma evidência relacionada a cada ponto parcial recuperado. Se o modelo omitir um
+desses pontos ou escolher apenas uma fonte relacionada para um ponto confirmado, retorna a
+resposta extrativa completa com o aviso de contingência.
+
+No Compose, somente a API recebe a configuração Bedrock e as credenciais AWS. Worker, migrador
+e importador recebem apenas as configurações locais necessárias.
+
+Os testes de consulta usam PDFs sintéticos para Férias, Inovação e Locação e PostgreSQL real.
+Cobrem filtros, respostas parciais, ausência de evidência, data histórica, sucessão, literalidade,
+página física após página vazia, autenticação e continuação por contingência. O Bedrock é simulado
+nos testes; nenhuma credencial ou chamada AWS real é necessária.
