@@ -253,17 +253,18 @@ def test_readiness_tracks_alembic_heads(management_client, monkeypatch, tmp_path
 
 
 @pytest.mark.parametrize("perspective", ["deadline", "value", "obligation", "risk"])
-def test_query_accepts_perspective_and_area(management_client, perspective):
+def test_query_accepts_perspective_and_area(management_client, topic, perspective):
     response = management_client.post(
         "/api/questions",
         json={
-            "topic_id": str(uuid4()),
+            "topic_id": str(topic),
             "question": "Qual o prazo?",
             "perspective": perspective,
             "filters": {"area": "GGC"},
         },
     )
-    assert response.status_code == 501
+    assert response.status_code == 200
+    assert response.json()["status"] == "insufficient"
 
 
 def test_upload_errors_and_pdf_download_match_openapi(management_client, topic):

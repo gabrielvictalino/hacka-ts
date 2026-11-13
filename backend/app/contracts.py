@@ -99,6 +99,12 @@ class DocumentVersion(Contract):
 
 
 class Citation(Contract):
+    document_id: UUID
+    document_type: str | None = None
+    document_layer: str | None = None
+    declared_phase: str | None = None
+    valid_from: date | None = None
+    valid_until: date | None = None
     version_id: UUID
     passage_id: UUID
     title: str
@@ -122,7 +128,7 @@ class QuestionFilters(Contract):
 
 class QuestionRequest(Contract):
     topic_id: UUID
-    question: str = Field(min_length=1, max_length=4000)
+    question: str = Field(min_length=1, max_length=4000, pattern=r"\S")
     reference_date: date | None = None
     perspective: Perspective | None = None
     filters: QuestionFilters = Field(default_factory=QuestionFilters)
@@ -141,6 +147,7 @@ class Divergence(Contract):
 
 
 class QuestionResponse(Contract):
+    notice: str | None = None
     mode: Literal["extractive", "generated"]
     status: Literal["supported", "partial", "insufficient", "divergent"]
     reference_date: date

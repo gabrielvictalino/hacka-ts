@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     collection_path: Path | None = None
     max_upload_bytes: int = 25 * 1024 * 1024
     worker_poll_seconds: float = 1.0
+    bedrock_model_id: str | None = None
+    bedrock_region: str = "us-east-1"
+    bedrock_timeout_seconds: float = Field(default=5, ge=1, le=30)
 
     @property
     def database_url(self) -> URL:

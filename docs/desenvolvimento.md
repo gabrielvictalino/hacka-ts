@@ -133,7 +133,7 @@ docker compose run --rm --no-deps api python -m app.export_contracts > packages/
 docker compose run --rm --no-deps frontend npm run contracts:generate
 ```
 
-A CI verifica se os arquivos gerados correspondem aos fontes. `POST /api/questions` disponibiliza o contrato e retorna 501 até a implementação da consulta em issue própria. Os endpoints de ingestão estão disponíveis para integrar upload e acompanhamento à tela de Gestão. A interface segue o trabalho de frontend; respostas, sínteses e divergências pertencem aos respectivos cartões.
+A CI verifica se os arquivos gerados correspondem aos fontes. `POST /api/questions` e `POST /perguntar` executam a consulta extrativa autenticada. Os endpoints de ingestão estão disponíveis para integrar upload e acompanhamento à tela de Gestão. A interface inclui consulta e painel de evidência; sínteses e divergências seguem nos respectivos cartões.
 
 ## Validação em ambiente isolado
 
@@ -153,3 +153,56 @@ docker compose -p ipbot-test down -v
 Os testes usam PostgreSQL real e PDFs sintéticos gerados na hora. Cobrem página física após página vazia, trecho literal, reenvio concorrente, falha sem páginas parciais, reprocessamento e acesso por perfil. A ingestão verifica cabeçalhos, edições do mesmo documento, itens longos, cláusulas, progresso visível, recuperação após queda, falha de banco no meio do lote e permissões do SSO para upload, lote, reenvio e criação de temas. A atualização de metadados é testada com versões prontas no schema `0001`, incluindo citações curadas e recuperação transacional após falha. As regressões também verificam atendimento de requisições durante upload bloqueado, restauração de original ausente sem alterar citações, novas migrações e múltiplos heads, perspectiva e área na consulta e os formatos de resposta publicados no OpenAPI. A CI também sobe todos os serviços e aguarda os healthchecks.
 
 Para atualizar dependências Python, edite `backend/requirements.in` e gere o lock com `uv pip compile backend/requirements.in --python-version 3.12 --output-file backend/requirements.txt --upgrade`. O frontend usa `npm ci` e `package-lock.json` versionado.
+
+
+## Perguntas e evidências (#10)
+
+A tela Consulta envia tema, pergunta, perspectiva, área e data para `POST /perguntar`
+(também disponível em `POST /api/questions`). Os mesmos perfis com acesso ao acervo podem consultar.
+A busca usa o índice `tsvector` em português, ranqueia os trechos e preserva seu texto literal.
+O filtro de área exige a presença textual da área no trecho; as perspectivas restringem por
+vocabulário de prazos, valores, obrigações ou riscos. Não há inferência de área ou responsável.
+
+As perguntas são separadas em pontos por `?`, `;`, quebra de linha ou ` e `, com até 12 pontos.
+A classificação `supported` significa que todos os termos relevantes de cada ponto aparecem
+juntos em ao menos um trecho; `partial` indica trechos relacionados com pontos sem correspondência
+completa; `insufficient` indica ausência de trechos verificáveis. As lacunas identificam o ponto
+sem confirmação e não são preenchidas pelo modelo. A classificação é textual, conservadora e
+não constitui validação semântica de uma interpretação. Não há detecção de divergências nesta issue.
+
+Só versões `ready` do tema entram na busca. Datas explícitas limitam a elegibilidade; a data de
+referência informada no campo tem prioridade. Uma única data `DD/MM/AAAA` ou `AAAA-MM-DD` na
+pergunta também é reconhecida; várias datas exigem o campo explícito. Sem data, usa-se o dia
+em `America/Recife`. Uma versão futura pode ser consultada escolhendo sua data de vigência.
+A sucessão considera `superseded_by` ou declaração inequívoca `Substitui a v2` / `Substitui a versão
+2.0.0` na primeira página do mesmo documento, com início confirmado da sucessora. Não se presume
+substituição por ordem de upload ou maior número da edição. Fases anteriores com aplicabilidade
+incerta são excluídas; sem datas em uma fonte corrente, a interface mostra a ausência do intervalo.
+Regras temporais mais amplas seguem no cartão de vigência.
+
+Cada citação contém documento, ID imutável da versão, ID do trecho, título, versão declarada,
+página física (começando em 1), item/cláusula quando identificado e trecho literal conferido
+contra a página persistida. `GET /api/citations/{passage_id}` resolve a evidência autenticada
+sem aplicar os filtros da nova consulta. `GET /api/documents/{version_id}/file#page=N` abre o
+mesmo PDF, inclusive após a entrada da sucessora. Retornar da evidência mantém a resposta.
+
+### Bedrock opcional
+
+Sem `BEDROCK_MODEL_ID`, nenhuma chamada AWS é feita. Para habilitar, configure esse campo,
+`BEDROCK_REGION` e credenciais AWS pelas variáveis do ambiente (`AWS_ACCESS_KEY_ID`,
+`AWS_SECRET_ACCESS_KEY` e, se necessário, `AWS_SESSION_TOKEN`), com permissão de invocação
+para o modelo escolhido. Não versione credenciais. A integração usa a
+[API Converse oficial](https://docs.aws.amazon.com/boto3/latest/reference/services/bedrock-runtime/client/converse.html).
+
+O modelo só pode selecionar trechos completos recebidos, sem reescrever nem recortar condições
+ou negações. IDs desconhecidos, texto alterado, resposta vazia ou inválida, erro de autenticação,
+indisponibilidade e timeout retornam os trechos locais originais, com um aviso curto.
+O timeout de leitura é `BEDROCK_TIMEOUT_SECONDS` (padrão 5 s, entre 1 e 30), o de conexão
+é 2 s, sem retentativas da invocação. A recuperação no PostgreSQL acontece antes da chamada;
+a geração nunca decide elegibilidade, lacunas ou URLs das fontes. Todos os trechos recuperados
+continuam acessíveis na tela, mesmo quando o modelo seleciona apenas alguns.
+
+Os testes de consulta usam PDFs sintéticos para Férias, Inovação e Locação e PostgreSQL real.
+Cobrem filtros, respostas parciais, ausência de evidência, data histórica, sucessão, literalidade,
+página física após página vazia, autenticação e continuação por contingência. O Bedrock é simulado
+nos testes; nenhuma credencial ou chamada AWS real é necessária.
