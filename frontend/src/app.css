@@ -1,0 +1,34 @@
+/* Navegação entre Consulta e Gestão e telas da Gestão (#12). Arquivo próprio para não colidir com style.css. */
+.app-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px; }
+.app-header .eyebrow { margin: 0; }
+.session { margin: 0; color: #4b6661; font-size: .9rem; overflow-wrap: anywhere; }
+
+.areas { display: flex; gap: 8px; margin-top: 24px; border-bottom: 2px solid #d9e4dd; }
+.area-tab { background: none; color: #17645b; border-radius: 6px 6px 0 0; border-bottom: 3px solid transparent; margin-bottom: -2px; }
+.area-tab[aria-current="page"] { color: #183534; font-weight: 600; border-bottom-color: #17645b; background: white; }
+
+.inline-field { display: inline-grid; gap: 6px; min-width: 220px; }
+.accounts button[aria-pressed="true"] { outline: 2px solid #b38530; outline-offset: 2px; }
+a.link-button { display: inline-block; border-radius: 6px; text-decoration: none; }
+.link-button:disabled { opacity: .5; }
+
+.new-topic { margin: 8px 0 16px; }
+.new-topic summary { cursor: pointer; color: #17645b; }
+.new-topic form { margin-top: 12px; }
+
+.upload-results, .managed-versions { list-style: none; padding: 0; }
+.upload-result { border-left: 4px solid #8ba49c; padding: 4px 12px; margin: 6px 0; overflow-wrap: anywhere; }
+.upload-result.failed { border-left-color: #9b2929; }
+.upload-result.queued, .upload-result.processing { border-left-color: #b38530; }
+.managed-version { border-top: 1px solid #d9e4dd; padding-top: 12px; margin-top: 12px; }
+.managed-version h4 { margin: 0 0 6px; overflow-wrap: anywhere; }
+.filename { overflow-wrap: anywhere; }
+.badge.status-ready { background: #e3efe9; color: #17463f; }
+.badge.status-queued, .badge.status-processing { background: #fbf0d9; color: #6b4a0e; }
+.badge.status-failed { background: #f8e3e3; color: #7a1f1f; }
+
+@media (max-width: 500px) {
+  .areas { gap: 4px; }
+  .area-tab { flex: 1; }
+  .inline-field { min-width: 0; width: 100%; }
+}

@@ -10,7 +10,11 @@ type Citation = components["schemas"]["Citation"];
 type Perspective = components["schemas"]["Perspective"];
 const statuses = { supported: "Sustentada por trechos", partial: "Resposta parcial", insufficient: "Sem evidência suficiente", divergent: "Divergência" };
 
-export function QuestionPanel({ topics }: { topics: Topic[] }) {
+function Gaps({ gaps }: { gaps: string[] }) {
+  return <><h3>Pontos sem confirmação</h3><ul>{gaps.map(gap => <li key={gap}>{gap}</li>)}</ul></>;
+}
+
+export function QuestionPanel({ topics, view }: { topics: Topic[]; view: string }) {
   const [topic, setTopic] = useState("");
   const [question, setQuestion] = useState("");
   const [perspective, setPerspective] = useState("");
@@ -70,13 +74,13 @@ export function QuestionPanel({ topics }: { topics: Topic[] }) {
     </form>
     {error && <p role="alert">{error}</p>}
     {result && <div aria-live="polite">
+      {/* Resposta primeiro: situação, aviso curto e afirmações com a fonte logo abaixo. */}
       <h3 ref={resultHeading} tabIndex={-1}>{statuses[result.status]}</h3>
-      <p>{context}</p>
-      <p>{result.mode === "extractive" ? "Modo extrativo" : "Seleção de trechos por modelo"} · Referência: {result.reference_date}</p>
-      <p>{result.calculation
-        ? "Os resultados foram calculados a partir das regras publicadas. Confira a memória de cálculo, as premissas e as fontes."
-        : "Os trechos são literais. A correspondência textual não confirma interpretações além do que a fonte declara."}</p>
-      {result.notice && <p role="status">{result.notice}</p>}
+      {result.notice && <p role="status" className="notice">{result.notice}</p>}
+      {/* Sem sustentação completa, a lacuna vem antes dos trechos para não ser lida como resposta. */}
+      {result.status !== "supported" && result.gaps.length > 0 && <Gaps gaps={result.gaps} />}
+      {result.claims.length === 0 && <p>Nenhuma afirmação foi sustentada pelos trechos do tema.</p>}
+      {result.status !== "supported" && result.claims.length > 0 && <p className="muted">Trechos relacionados encontrados no tema. Eles não confirmam os pontos acima.</p>}
       {result.claims.map((claim, index) => <article className="claim" key={index}>
         {claim.calculation_step != null && <p>Resultado calculado · passo {claim.calculation_step + 1}</p>}
         <blockquote>{claim.text}</blockquote>
@@ -84,6 +88,12 @@ export function QuestionPanel({ topics }: { topics: Topic[] }) {
           Conferir {c.code || c.title} · {c.version || "versão não identificada"} · p. {c.physical_page}{c.section ? ` · ${c.section}` : ""}
         </button>)}
       </article>)}
+      {result.status === "supported" && result.gaps.length > 0 && <Gaps gaps={result.gaps} />}
+      <p className="muted">{context}{view ? ` · Visão: ${view}` : ""}</p>
+      <p className="muted">{result.mode === "extractive" ? "Modo extrativo" : "Seleção de trechos por modelo"} · Referência: {result.reference_date}</p>
+      <p className="muted">{result.calculation
+        ? "Os resultados foram calculados a partir das regras publicadas. Confira a memória de cálculo, as premissas e as fontes."
+        : "Os trechos são literais. A correspondência textual não confirma interpretações além do que a fonte declara."}</p>
       {result.passages.length > 0 && <details><summary>Todas as fontes recuperadas ({result.passages.length})</summary>
         <ul>{result.passages.map(c => <li key={c.passage_id}><button onClick={() => setEvidence(c)}>
           {c.code || c.title} · {c.version || "versão não identificada"} · p. {c.physical_page}
@@ -94,7 +104,6 @@ export function QuestionPanel({ topics }: { topics: Topic[] }) {
         {(result.calculation.assumptions?.length ?? 0) > 0 && <><h3>Premissas do cálculo</h3>
           <ul>{result.calculation.assumptions?.map(assumption => <li key={assumption}>{assumption}</li>)}</ul></>}
       </>}
-      {result.gaps.length > 0 && <><h3>Pontos sem confirmação</h3><ul>{result.gaps.map(gap => <li key={gap}>{gap}</li>)}</ul></>}
       {evidence && <EvidencePanel ref={evidencePanel} evidence={evidence} closeLabel="Voltar à resposta"
         onClose={() => { setEvidence(null); resultHeading.current?.focus(); }} />}
     </div>}
