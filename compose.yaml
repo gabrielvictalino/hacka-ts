@@ -1,0 +1,92 @@
+name: ipbot
+
+x-backend: &backend
+  build:
+    context: .
+    dockerfile: backend/Dockerfile
+  environment: &backend-env
+    POSTGRES_DB: ${POSTGRES_DB:?Execute python3 scripts/init_env.py}
+    POSTGRES_USER: ${POSTGRES_USER:?Configure POSTGRES_USER}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Configure POSTGRES_PASSWORD}
+    POSTGRES_HOST: db
+    AUTH_SECRET: ${AUTH_SECRET:?Configure AUTH_SECRET}
+    AUTH_DEMO_ENABLED: ${AUTH_DEMO_ENABLED:-false}
+    AUTH_DEMO_USERS: ${AUTH_DEMO_USERS:-{}}
+    STORAGE_PATH: /data/documents
+  volumes:
+    - ./backend:/app/backend
+    - documents:/data/documents
+
+services:
+  db:
+    image: postgres:17.9-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Configure POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?Configure POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Configure POSTGRES_PASSWORD}
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    <<: *backend
+    command: [alembic, -c, backend/alembic.ini, upgrade, heads]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    <<: *backend
+    command: [uvicorn, app.main:app, --app-dir, backend, --host, 0.0.0.0, --port, '8000', --reload]
+    ports:
+      - '127.0.0.1:${API_PORT:-8000}:8000'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  worker:
+    <<: *backend
+    command: [python, -m, app.worker]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, python, -m, app.worker, --healthcheck]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    environment:
+      API_PROXY_TARGET: http://api:8000
+    ports:
+      - '127.0.0.1:${FRONTEND_PORT:-5173}:5173'
+    volumes:
+      - ./frontend:/app/frontend
+      - ./packages:/app/packages
+      - frontend_modules:/app/frontend/node_modules
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://localhost:5173').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  postgres:
+  documents:
+  frontend_modules:

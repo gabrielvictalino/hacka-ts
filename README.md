@@ -40,7 +40,19 @@ A plataforma deve apresentar o prazo, identificar o documento e a versão consul
 
 A BBTS recomenda **React ou Angular** no front-end, **Java, Node.js ou Python** no back-end, **PostgreSQL** para persistência e **AWS** na nuvem. O ambiente oferecido pela organização pode apoiar o desenvolvimento com Kiro e serviços de IA.
 
-A stack final e as instruções para instalar, configurar e executar o MVP serão registradas após a implementação.
+O ambiente de desenvolvimento usa **React + TypeScript**, **FastAPI**, **PostgreSQL** e um **worker Python** com fila persistida no banco.
+
+Requisitos: Docker com Compose v2 ou superior e Python 3 para gerar a configuração local.
+
+```sh
+python3 scripts/init_env.py
+docker compose up --build -d --wait
+```
+
+Abra o frontend em <http://localhost:5173> e a documentação da API em <http://localhost:8000/docs>.
+O frontend inicial permite selecionar uma conta fictícia do simulador de SSO e conferir os temas importados.
+
+Consulte o [guia de desenvolvimento](docs/desenvolvimento.md) para importar o acervo, executar migrações, regenerar contratos e rodar os testes.
 
 ## Roadmap proposto de seis meses
 
