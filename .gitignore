@@ -11,3 +11,4 @@ dist/
 data/
 .DS_Store
 *.tsbuildinfo
+acervo/

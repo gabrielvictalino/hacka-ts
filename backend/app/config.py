@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     auth_demo_users: dict[str, DemoAccount] = Field(default_factory=dict)
     auth_cookie_secure: bool = True
     storage_path: Path = Path("/data/documents")
+    collection_path: Path | None = None
     max_upload_bytes: int = 25 * 1024 * 1024
     worker_poll_seconds: float = 1.0
 

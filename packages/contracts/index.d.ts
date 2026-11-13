@@ -150,7 +150,8 @@ export interface paths {
         /** Topics */
         get: operations["topics_api_topics_get"];
         put?: never;
-        post?: never;
+        /** Create Topic */
+        post: operations["create_topic_api_topics_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -169,6 +170,40 @@ export interface paths {
         put?: never;
         /** Upload */
         post: operations["upload_api_documents_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Batch */
+        post: operations["upload_batch_api_documents_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{version_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry Document */
+        post: operations["retry_document_api_documents__version_id__retry_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -240,6 +275,14 @@ export interface components {
             /** Token */
             token: string;
         };
+        /** BatchFileResult */
+        BatchFileResult: {
+            /** Filename */
+            filename: string;
+            result?: components["schemas"]["IngestionResult"] | null;
+            /** Error */
+            error?: string | null;
+        };
         /** Body_upload_api_documents_post */
         Body_upload_api_documents_post: {
             /**
@@ -249,6 +292,16 @@ export interface components {
             topic_id: string;
             /** File */
             file: string;
+        };
+        /** Body_upload_batch_api_documents_batch_post */
+        Body_upload_batch_api_documents_batch_post: {
+            /**
+             * Topic Id
+             * Format: uuid
+             */
+            topic_id: string;
+            /** Files */
+            files: string[];
         };
         /** Citation */
         Citation: {
@@ -334,6 +387,20 @@ export interface components {
             code: string | null;
             /** Version */
             version: string | null;
+            /** Document Type */
+            document_type: string | null;
+            /** Document Layer */
+            document_layer: string | null;
+            /** Declared Phase */
+            declared_phase: string | null;
+            /** Valid From */
+            valid_from: string | null;
+            /** Valid Until */
+            valid_until: string | null;
+            /** Linked Codes */
+            linked_codes: string[];
+            /** Processed Pages */
+            processed_pages: number;
             /**
              * Status
              * @enum {string}
@@ -448,6 +515,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Name */
+            name: string;
+        };
+        /** TopicRequest */
+        TopicRequest: {
             /** Name */
             name: string;
         };
@@ -736,6 +808,41 @@ export interface operations {
             };
         };
     };
+    create_topic_api_topics_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ipbot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TopicRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Topic"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     documents_api_documents_get: {
         parameters: {
             query: {
@@ -800,6 +907,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["APIError"];
+                };
+            };
+        };
+    };
+    upload_batch_api_documents_batch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                ipbot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_batch_api_documents_batch_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchFileResult"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_document_api_documents__version_id__retry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                version_id: string;
+            };
+            cookie?: {
+                ipbot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestionResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
