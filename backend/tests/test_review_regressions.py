@@ -9,6 +9,7 @@ import httpx
 import pytest
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from app import main
 from app.auth import issue_demo_token
 from app.config import get_settings
@@ -174,14 +175,17 @@ def test_restore_failure_does_not_requeue_version(topic, monkeypatch):
         )
 
 
-@pytest.mark.parametrize("heads", [("0002",), ("0002a", "0002b")])
-def test_readiness_tracks_alembic_heads(management_client, monkeypatch, tmp_path, heads):
-    original = Path(get_migration_config().get_main_option("script_location"))
+@pytest.mark.parametrize("head_count", [1, 2])
+def test_readiness_tracks_alembic_heads(management_client, monkeypatch, tmp_path, head_count):
+    original_config = get_migration_config()
+    baseline_heads = ScriptDirectory.from_config(original_config).get_heads()
+    heads = [f"test_review_{index}" for index in range(head_count)]
+    original = Path(original_config.get_main_option("script_location"))
     migrations = tmp_path / "migrations"
     shutil.copytree(original, migrations)
     for head in heads:
         (migrations / "versions" / f"{head}.py").write_text(
-            f"revision = {head!r}\ndown_revision = '0001'\n"
+            f"revision = {head!r}\ndown_revision = {tuple(baseline_heads)!r}\n"
             "branch_labels = None\ndepends_on = None\n"
             "def upgrade(): pass\ndef downgrade(): pass\n"
         )
@@ -195,7 +199,8 @@ def test_readiness_tracks_alembic_heads(management_client, monkeypatch, tmp_path
         assert response.status_code == 200
         assert response.json()["migrations"] == sorted(heads)
     finally:
-        command.downgrade(config, "0001")
+        # As revisões temporárias são no-op; restaura somente o registro dos heads reais.
+        command.stamp(config, baseline_heads, purge=True)
 
 
 @pytest.mark.parametrize("perspective", ["deadline", "value", "obligation", "risk"])
