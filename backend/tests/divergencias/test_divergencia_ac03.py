@@ -9,6 +9,7 @@ from app.main import app
 from app.worker import process_one
 from conftest import make_pdf
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 NG_HEADER = """Documento: Norma Geral
 Título: Férias
@@ -218,3 +219,82 @@ def test_divergence_routes_require_session_and_existing_topic(client, topic, mon
     app.dependency_overrides.clear()
     assert client.get("/api/divergencias", params={"topic_id": str(topic)}).status_code == 401
     assert client.get("/api/divergencias/avisos", params={"topic_id": str(topic)}).status_code == 401
+
+
+def test_both_passages_missing_with_published_editions_is_reported_as_possible(client, topic):
+    acervo(topic, precedence="2.1. Histórico.", px_notice="8.4. Emitir o aviso.")
+    with get_engine().begin() as connection:
+        connection.execute(
+            text("""UPDATE passages s SET excerpt='4.5.3. Prazo de aviso revisado.' FROM pages p
+                JOIN document_versions v ON v.id=p.version_id
+                WHERE s.page_id=p.id AND v.topic_id=:topic AND s.section='4.5.3'"""),
+            {"topic": topic},
+        )
+    (divergence,) = details(client, topic)["divergences"]
+    assert divergence["status"] == "possible" and divergence["guidances"] == []
+    missing = " ".join(divergence["missing_information"])
+    assert "4.5.3" in missing and "8.4.2" in missing and "Precedência declarada não localizada" in missing
+
+
+def test_missing_passage_still_checks_validity_of_its_edition(client, topic):
+    acervo(topic, px_notice="8.4. Emitir o aviso.")
+    # O PX_1111-001 só começa em 10/08/2026, mesmo sem a passagem 8.4.2 localizada.
+    (divergence,) = details(client, topic, "2026-08-05")["divergences"]
+    assert divergence["status"] == "not_applicable"
+    assert "PX_1111-001 v1.0.0 com vigência a iniciar" in divergence["status_explanation"]
+    assert any("8.4.2" in item for item in divergence["missing_information"])
+    assert notices(client, topic, "2026-08-05") == []
+
+
+def test_calculation_citing_the_notice_deadline_gets_the_divergence_notice(client, topic, monkeypatch):
+    from app import calculations
+    from app.contracts import RuleResult, RuleStep
+    from app.fatos.catalogo import CuratedFact, Source
+    from app.fatos.curadoria import publish_catalog
+
+    acervo(topic)
+    with get_engine().begin() as connection:
+        name = connection.execute(text("SELECT name FROM topics WHERE id=:id"), {"id": topic}).scalar_one()
+        fact = CuratedFact(
+            key="ferias.aviso.emissao",
+            topic=name,
+            category="deadline",
+            attribute="emissao_do_aviso",
+            area="GGC",
+            responsible="GGC",
+            statement="Emitir o aviso de férias.",
+            value_text="Até D-35",
+            sources=(Source("NG_111", "3.0.0", 3, "4.5.3", "Emissão do aviso pela GGC: até 35 dias antes."),),
+        )
+        assert publish_catalog(connection, (fact,)).published == 1
+
+    def schedule(facts, request):
+        citations = facts["ferias.aviso.emissao"].citations
+        step = RuleStep(
+            label="Aviso",
+            rule="D-35",
+            result_text="Até D-35",
+            computation=["D-35"],
+            fact_keys=["ferias.aviso.emissao"],
+            citations=citations,
+        )
+        return RuleResult(rule="ferias.prazos", steps=[step])
+
+    monkeypatch.setitem(calculations.RULES, "ferias.prazos", (["ferias.aviso.emissao"], schedule))
+    try:
+        response = client.post(
+            "/perguntar",
+            json={
+                "topic_id": str(topic),
+                "question": "Calcule os prazos.",
+                "reference_date": "2026-11-13",
+                "calculation": {"rule": "ferias.prazos", "start_date": "2026-12-16"},
+            },
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["calculation"] is not None
+        assert [n["key"] for n in body["divergence_notices"]] == [KEY]
+    finally:
+        with get_engine().begin() as connection:
+            connection.execute(text("DELETE FROM curated_facts WHERE topic_id=:id"), {"id": topic})

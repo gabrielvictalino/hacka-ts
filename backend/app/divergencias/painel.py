@@ -56,10 +56,28 @@ def _cite(connection, topic_id, source: Source) -> tuple[Citation | None, str | 
     return citation.model_copy(update={"excerpt": literal, "section": source.item}), None
 
 
-def _present(connection, topic_id, divergence: CuratedDivergence, states, reference) -> SourceDivergence | None:
-    guidances, missing = [], []
+def _edition(connection, topic_id, source: Source):
+    """Edição revisada publicada no tema, localizada por código e versão, independentemente do trecho."""
+    return connection.execute(
+        text("""SELECT v.id FROM document_versions v JOIN documents d ON d.id=v.document_id
+            WHERE v.topic_id=:topic AND d.code=:code AND v.version=:version AND v.status='ready'
+            ORDER BY v.created_at LIMIT 1"""),
+        {"topic": topic_id, "code": source.code, "version": source.version},
+    ).scalar()
+
+
+def _present(connection, topic_id, divergence: CuratedDivergence, states, reference):
+    """Devolve a divergência e as edições envolvidas; nenhuma edição publicada no tema, nenhuma divergência."""
+    guidances, missing, editions = [], [], {}
     for item in divergence.guidances:
-        citation, reason = _cite(connection, topic_id, item.source)
+        source = item.source
+        edition = _edition(connection, topic_id, source)
+        if edition is None:
+            missing.append(f"{source.code} v{source.version}: edição não publicada no tema.")
+            continue
+        # A vigência vale para a edição mesmo quando o trecho revisado não é localizado.
+        editions[edition] = (source, states[edition])
+        citation, reason = _cite(connection, topic_id, source)
         if citation is None:
             missing.append(reason)
             continue
@@ -73,8 +91,7 @@ def _present(connection, topic_id, divergence: CuratedDivergence, states, refere
                 citation=citation,
             )
         )
-    if not guidances:
-        # Nenhuma das fontes revisadas está publicada neste tema.
+    if not editions:
         return None
 
     precedence = None
@@ -95,18 +112,18 @@ def _present(connection, topic_id, divergence: CuratedDivergence, states, refere
                 citation=citation,
             )
 
-    inapplicable = [g for g in guidances if g.status in NOT_APPLICABLE]
-    unconfirmed = [g for g in guidances if not g.applicable and g.status not in NOT_APPLICABLE]
-    for guidance in unconfirmed:
+    inapplicable = [(s, st) for s, st in editions.values() if st.status in NOT_APPLICABLE]
+    unconfirmed = [(s, st) for s, st in editions.values() if not st.applicable and st.status not in NOT_APPLICABLE]
+    for source, _ in unconfirmed:
         missing.append(
-            f"{guidance.citation.code} v{guidance.citation.version}: aplicação em {_br(reference)} não confirmada "
+            f"{source.code} v{source.version}: aplicação em {_br(reference)} não confirmada "
             "pelas datas e sucessões documentadas."
         )
     if inapplicable:
         status = "not_applicable"
-        editions = "; ".join(f"{g.citation.code} v{g.citation.version} {STATUS_TEXT[g.status]}" for g in inapplicable)
+        listed = "; ".join(f"{s.code} v{s.version} {STATUS_TEXT[st.status]}" for s, st in inapplicable)
         explanation = (
-            f"Fora do cenário em {_br(reference)}: {editions}. As passagens continuam consultáveis como fontes "
+            f"Fora do cenário em {_br(reference)}: {listed}. As passagens continuam consultáveis como fontes "
             "históricas."
         )
     elif len(guidances) < len(divergence.guidances) or unconfirmed:
@@ -125,7 +142,7 @@ def _present(connection, topic_id, divergence: CuratedDivergence, states, refere
                 else "A precedência entre as fontes não foi confirmada."
             )
         )
-    return SourceDivergence(
+    presented = SourceDivergence(
         key=divergence.key,
         scenario_id=divergence.scenario_id,
         subject=divergence.subject,
@@ -141,15 +158,20 @@ def _present(connection, topic_id, divergence: CuratedDivergence, states, refere
         curated_by=CURATOR,
         reviewed_on=REVIEWED_ON,
     )
+    return presented, set(editions)
+
+
+def _presented(connection, topic_id, reference: date):
+    states = version_states(connection, topic_id, reference)
+    return [
+        result
+        for divergence in DIVERGENCES
+        if (result := _present(connection, topic_id, divergence, states, reference))
+    ]
 
 
 def topic_divergences(connection, topic_id, reference: date) -> TopicDivergences:
-    states = version_states(connection, topic_id, reference)
-    divergences = [
-        presented
-        for divergence in DIVERGENCES
-        if (presented := _present(connection, topic_id, divergence, states, reference))
-    ]
+    divergences = [presented for presented, _ in _presented(connection, topic_id, reference)]
     return TopicDivergences(
         topic_id=topic_id, reference_date=reference, curation_note=CURATION_NOTE, divergences=divergences
     )
@@ -184,13 +206,12 @@ def divergence_notices(
     passages = {c.passage_id for c in citations or ()}
     versions = {c.version_id for c in citations or ()}
     notices = []
-    for divergence in topic_divergences(connection, topic_id, reference).divergences:
+    for divergence, editions in _presented(connection, topic_id, reference):
         if divergence.status == "not_applicable":
             continue
         if citations is not None:
-            cited = [g.citation for g in divergence.guidances]
-            direct = passages.intersection(c.passage_id for c in cited)
-            related = versions.intersection(c.version_id for c in cited) and _mentions(question, terms[divergence.key])
+            direct = passages.intersection(g.citation.passage_id for g in divergence.guidances)
+            related = versions.intersection(editions) and _mentions(question, terms[divergence.key])
             if not (direct or related):
                 continue
         notices.append(_notice(divergence))

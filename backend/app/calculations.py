@@ -99,6 +99,14 @@ def answer_calculation(body: QuestionRequest, eligible_versions, verify) -> Ques
     # As fontes retornadas são apenas as efetivamente usadas na memória de cálculo.
     used = {c.passage_id for step in result.steps for c in step.citations}
     response.passages = [source for identifier, source in passages.items() if identifier in used]
+    if response.passages:
+        # Importação tardia: o painel de divergências reutiliza as citações da consulta.
+        from app.divergencias.painel import divergence_notices
+
+        with get_engine().connect() as connection:
+            response.divergence_notices = divergence_notices(
+                connection, body.topic_id, body.reference_date, response.passages, body.question
+            )
     response.calculation = result
     response.claims = calculation_claims(result)
     response.status = "supported"
