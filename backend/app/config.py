@@ -15,7 +15,7 @@ class DemoAccount(BaseModel):
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=None, env_ignore_empty=True, extra="ignore")
+    model_config = SettingsConfigDict(env_file=None, env_ignore_empty=True, extra="ignore", hide_input_in_errors=True)
     postgres_db: str = "ipbot"
     postgres_user: str = "ipbot"
     postgres_password: SecretStr

@@ -249,26 +249,134 @@ mesmo PDF, inclusive após a entrada da sucessora. Retornar da evidência manté
 
 ### Bedrock opcional
 
-Sem `BEDROCK_MODEL_ID`, nenhuma chamada AWS é feita. Para habilitar, configure esse campo,
-`BEDROCK_REGION` e credenciais AWS pelas variáveis do ambiente (`AWS_ACCESS_KEY_ID`,
-`AWS_SECRET_ACCESS_KEY` e, se necessário, `AWS_SESSION_TOKEN`), com permissão de invocação
-para o modelo escolhido. Não versione credenciais. A integração usa a
-[API Converse oficial](https://docs.aws.amazon.com/boto3/latest/reference/services/bedrock-runtime/client/converse.html).
+Sem `BEDROCK_MODEL_ID`, nenhuma chamada AWS é feita. O modelo inicial sugerido é
+**Claude Haiku 4.5**, com `BEDROCK_REGION=us-east-1` e
+`BEDROCK_MODEL_ID=us.anthropic.claude-haiku-4-5-20251001-v1:0`, se disponível para a conta.
+O campo aceita ID ou ARN de modelo/perfil compatível com a
+[API Converse](https://docs.aws.amazon.com/boto3/latest/reference/services/bedrock-runtime/client/converse.html).
+Confira a [disponibilidade do Haiku 4.5](https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-haiku-4-5.html)
+antes de escolher outro perfil/região. Não é necessário provisionar Knowledge Bases ou embeddings.
 
-O modelo só pode selecionar trechos completos recebidos, sem reescrever nem recortar condições
-ou negações. IDs desconhecidos, texto alterado, resposta vazia ou inválida, erro de autenticação,
-indisponibilidade e timeout retornam os trechos locais originais, com um aviso curto.
-O timeout de leitura é `BEDROCK_TIMEOUT_SECONDS` (padrão 5 s, entre 1 e 30), o de conexão
-é 2 s, sem retentativas da invocação. A recuperação no PostgreSQL acontece antes da chamada;
-a geração nunca decide elegibilidade, lacunas ou URLs das fontes. Todos os trechos recuperados
-continuam acessíveis na tela, mesmo quando o modelo seleciona apenas alguns. Antes de aceitar
-a seleção, o backend exige na resposta principal ao menos uma evidência que confirma cada ponto
-confirmado e uma evidência relacionada a cada ponto parcial recuperado. Se o modelo omitir um
-desses pontos ou escolher apenas uma fonte relacionada para um ponto confirmado, retorna a
-resposta extrativa completa com o aviso de contingência.
+Requisitos para a validação real (não exigidos pelos testes simulados):
 
-No Compose, somente a API recebe a configuração Bedrock e as credenciais AWS. Worker, migrador
-e importador recebem apenas as configurações locais necessárias.
+- Credenciais disponíveis no ambiente da API pela cadeia padrão do boto3: role da aplicação,
+  perfil AWS local ou credenciais temporárias. Não envie chaves por chat nem as versione.
+- `bedrock:InvokeModel` no modelo e, quando utilizado, no perfil de inferência. Para perfis entre
+  regiões, autorize também os modelos nas regiões de destino e confira bloqueios por SCP.
+  Use a [documentação de permissões de perfis](https://docs.aws.amazon.com/bedrock/latest/userguide/inference-profiles-prereq.html)
+  para restringir os ARNs da conta; a aplicação não precisa criar ou listar perfis.
+- Modelo habilitado para a conta, requisitos iniciais da Anthropic e eventual assinatura
+  Marketplace resolvidos por um administrador. Essas permissões de ativação não precisam
+  permanecer na role da aplicação. Veja [acesso a modelos](https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html).
+- Rede HTTPS até `bedrock-runtime` na região escolhida e cota disponível para inferência.
+
+A [política de exemplo](aws/bedrock-invoke-policy.example.json) restringe a invocação ao
+perfil US do Haiku 4.5 a partir de `us-east-1`. Um administrador deve substituir a conta
+fictícia `111122223333` pela conta real e conferir regiões de destino e SCPs antes de anexá-la
+à role. Ela não concede ativação Marketplace, administração, listagem nem streaming.
+
+No Compose local, somente a API recebe `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` e
+`AWS_SESSION_TOKEN` do ambiente; perfis SSO do host não são montados automaticamente.
+Para executar fora do Docker, boto3 também encontra perfis por `AWS_PROFILE`.
+Em produção, use a role do serviço e a cadeia de credenciais correspondente ao ambiente.
+Worker, migrador e frontend não recebem credenciais Bedrock.
+
+Após configurar o ambiente, execute o preflight **no mesmo ambiente da API**:
+
+```sh
+docker compose run --rm --no-deps api python -m app.check_bedrock
+```
+
+O comando realiza uma chamada faturável pequena, com pergunta e evidência sintéticas, e valida
+as citações recebidas. Não envia o acervo nem altera IAM ou assinaturas. Retorna JSON com
+região, modelo e disponibilidade; código 0 significa invocação e validação bem-sucedidas,
+1 indica falha (por exemplo, `AccessDeniedException`, `ThrottlingException` ou timeout) e
+2 indica modelo não configurado ou configuração inválida. Na configuração inválida, retorna
+`error=configuration_error` e apenas o nome do campo raiz e o tipo de validação (ou a classe
+do erro de parsing), sem valores, contexto, mensagens ou traceback. Mensagens remotas e
+credenciais não são impressas.
+Sem executar esse comando com credenciais válidas, o acesso real permanece não verificado.
+
+O modelo recebe a pergunta, a mesma data efetiva resolvida para a busca (inclusive quando
+omitida no pedido), perspectiva, filtros e somente os trechos já elegíveis e
+conferidos contra as páginas persistidas. Documentos e pergunta são tratados como dados;
+a instrução de sistema proíbe seguir comandos documentais, completar lacunas ou calcular.
+O backend aceita JSON puro ou envolvido em uma única cerca Markdown (`json` ou sem linguagem),
+sem prosa antes ou depois. O conteúdo continua exigindo afirmações literais completas e IDs únicos presentes nas
+evidências. Metadados (versão, página, item e trecho) sempre vêm do banco. Lacunas e situação
+da resposta continuam calculadas localmente. A seleção precisa manter evidência de cada
+ponto recuperado, inclusive os pontos com confirmação completa.
+
+No MVP a organização é feita por seleção e ordenação de trechos; não se valida uma paráfrase
+arbitrária apenas pela existência de uma citação. Isso preserva condições e negações.
+Os cálculos de datas e valores continuam em `app.regras` e nos endpoints `/api/regras/*`, com
+fatos curados, premissas e memória de cálculo. A consulta também permite um cálculo explícito
+em `calculation`, sem interpretar parâmetros numéricos por LLM nem aceitar resultados do cliente.
+Não há extração automática de fatos ou detecção geral de conflitos.
+
+### Explicar um cálculo na consulta
+
+`POST /perguntar` (ou `/api/questions`) aceita `calculation` opcional. Informe a regra e seus
+parâmetros tipados. Exemplo, substituindo o UUID pelo tema que contém os fatos curados:
+
+```json
+{
+  "topic_id": "00000000-0000-4000-8000-000000000019",
+  "question": "Explique o ressarcimento para uma despesa de R$ 3.000,00.",
+  "reference_date": "2026-11-13",
+  "calculation": {"rule": "ferias.ressarcimento", "amount": 3000}
+}
+```
+
+Regras disponíveis e parâmetros (iguais aos endpoints `/api/regras/*`):
+
+- `ferias.prazos`: `start_date`, opcionais `holidays`, `request_registered_on`, `notice_received_on`.
+- `ferias.ausencia_simultanea`: `team_size`.
+- `ferias.dias_por_faltas`: `absences`.
+- `ferias.ressarcimento` e `inovacao.alcada`: `amount`.
+- `inovacao.orcamento` e `inovacao.pagamento_premiacao`: sem parâmetros adicionais.
+
+A regra explícita define a operação; o texto da pergunta fornece contexto para sua apresentação.
+Pedidos com cálculo são dedicados a essa operação, sem executar busca textual para outras perguntas
+no mesmo texto. Para consultar outro ponto, faça um pedido separado sem `calculation`.
+O servidor executa o mesmo motor Python das rotas de regras usando somente fatos curados do
+tema e do filtro de área, com todas as fontes em versões elegíveis na data efetiva.
+A perspectiva textual não filtra os fatos necessários a uma regra explícita, inclusive quando
+um cliente da API envia `perspective` junto de `calculation`. Cada citação é
+reconferida contra a página persistida; sem todos os parâmetros curados elegíveis, retorna
+lacuna e não chama o Bedrock. O cliente não pode enviar resultados, memória ou citações.
+
+A resposta inclui `calculation` (`RuleResult`) com resultados numéricos/datas, memória de cálculo,
+avisos, premissas e fontes. O modelo recebe essa estrutura e explicações determinísticas de cada
+passo para organizar a apresentação. Afirmações calculadas usam `calculation_step` (índice começando
+em zero) e devem copiar a explicação inteira correspondente. O backend rejeita números, unidades,
+memória ou fontes alterados, índices desconhecidos/duplicados e omissão de qualquer passo.
+Uma citação documental sozinha não valida um resultado calculado. Avisos e premissas são preservados
+fora do controle do modelo e exibidos na interface.
+
+Sem modelo ou em contingência, a mesma resposta local conserva todos os resultados e as fontes;
+com modelo, a organização pode mudar, mas a memória e as premissas permanecem iguais. O modo
+`extractive` continua identificando a resposta local, incluindo resultados calculados em código.
+A inferência de cálculos a partir de texto livre e novas regras (por exemplo, multa de Locação)
+não são implementadas aqui. O formulário de consulta oferece **Cálculo com explicação (opcional)** com as sete regras e
+campos específicos: valores monetários, tamanho da equipe, faltas, início das férias, datas
+opcionais e feriados adicionados individualmente. Campos obrigatórios e limites numéricos são
+validados antes do envio. Ao trocar de regra, os parâmetros são limpos; trocar de tema também
+volta para **Sem cálculo**. Regras de orçamento e pagamento de premiações não exigem campos
+adicionais. Ao escolher uma regra, o seletor de perspectiva é desabilitado e mostra
+**Definida pela regra**; `perspective` é omitido do pedido. A perspectiva anterior é preservada
+para voltar à busca textual. A pergunta, o tema, a data de referência e o filtro de área acompanham `calculation`;
+**Sem cálculo** envia `calculation=null` e mantém a busca textual. O período das férias e a data
+de referência são campos distintos: um alimenta a conta e o outro seleciona as fontes elegíveis.
+
+IDs desconhecidos, duplicatas, metadados injetados, texto alterado, JSON inválido, resposta
+vazia, truncamento, bloqueio de conteúdo, perda de cobertura, erros AWS e timeout preservam
+a resposta extrativa completa, com aviso curto na interface. Os logs registram somente a
+classe do erro, sem pergunta, trechos ou resposta remota. O cliente usa conexão de 2 segundos,
+leitura de `BEDROCK_TIMEOUT_SECONDS` (1–30, padrão 5) e uma tentativa, sem retries automáticos.
+Esses limites são de socket, não um deadline global que inclui resolução de credenciais.
+Entradas acima de 120.000 bytes e saídas acima de 64.000 bytes também usam contingência;
+não se cortam evidências para caber no modelo.
 
 Os testes de consulta usam PDFs sintéticos para Férias, Inovação e Locação e PostgreSQL real.
 Cobrem filtros, respostas parciais, ausência de evidência, data histórica, sucessão, literalidade,

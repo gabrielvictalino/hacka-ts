@@ -159,14 +159,14 @@ def test_bedrock_output_is_verified_against_literals(reader, topic, monkeypatch,
     output = output.replace("REAL", baseline["passages"][0]["passage_id"])
 
     class Model:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
+        def close(self):
             pass
 
         def converse(self, **kwargs):
-            return {"output": {"message": {"content": [{"text": output}]}}}
+            return {
+                "stopReason": "end_turn",
+                "output": {"message": {"role": "assistant", "content": [{"text": output}]}},
+            }
 
     monkeypatch.setattr(boto3, "client", lambda *a, **k: Model())
     monkeypatch.setattr(get_settings(), "bedrock_model_id", "test-model")
@@ -219,10 +219,7 @@ def test_bedrock_validates_full_excerpt_and_bounds_network_timeout(reader, topic
     monkeypatch.setattr(get_settings(), "bedrock_model_id", "test-model")
 
     class Model:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
+        def close(self):
             pass
 
         def converse(self, **kwargs):
@@ -230,17 +227,19 @@ def test_bedrock_validates_full_excerpt_and_bounds_network_timeout(reader, topic
 
             assert kwargs["modelId"] == "test-model"
             return {
+                "stopReason": "end_turn",
                 "output": {
                     "message": {
+                        "role": "assistant",
                         "content": [
                             {
                                 "text": json.dumps(
                                     {"claims": [{"passage_id": source["passage_id"], "text": source["excerpt"]}]}
                                 )
                             }
-                        ]
+                        ],
                     }
-                }
+                },
             }
 
     def model_client(*args, **kwargs):
@@ -363,15 +362,15 @@ def bedrock_selection(monkeypatch):
 
     def configure(citations):
         class Model:
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *args):
+            def close(self):
                 pass
 
             def converse(self, **kwargs):
                 payload = {"claims": [{"passage_id": c["passage_id"], "text": c["excerpt"]} for c in citations]}
-                return {"output": {"message": {"content": [{"text": json.dumps(payload)}]}}}
+                return {
+                    "stopReason": "end_turn",
+                    "output": {"message": {"role": "assistant", "content": [{"text": json.dumps(payload)}]}},
+                }
 
         monkeypatch.setattr(boto3, "client", lambda *a, **k: Model())
         monkeypatch.setattr(get_settings(), "bedrock_model_id", "test-model")
@@ -721,3 +720,69 @@ def test_parenthetical_without_own_support_does_not_borrow_general_deadline(read
     result = ask(reader, topic, "Qual o prazo para cancelar férias?")
     assert result["status"] == "partial" and result["gaps"]
     assert result["claims"][0]["text"] == literal
+
+
+@pytest.mark.parametrize("failure", ["timeout", "denied", "throttled", "truncated", "duplicate", "calculated"])
+def test_aws_and_validation_failures_keep_full_response_without_logging_content(
+    reader, topic, monkeypatch, caplog, failure
+):
+    import json
+
+    import boto3
+    from botocore.exceptions import ClientError, ReadTimeoutError
+
+    literal = "Locação: prazo de 30 dias, salvo cancelamento."
+    ingest(topic, [literal])
+    baseline = ask(reader, topic, "Prazo locação? Valor marciano?")
+    source = baseline["passages"][0]
+    monkeypatch.setattr(get_settings(), "bedrock_model_id", "test-model")
+
+    class Model:
+        def close(self):
+            pass
+
+        def converse(self, **kwargs):
+            if failure == "timeout":
+                raise ReadTimeoutError(endpoint_url="https://bedrock-runtime.us-east-1.amazonaws.com")
+            if failure in {"denied", "throttled"}:
+                code = "AccessDeniedException" if failure == "denied" else "ThrottlingException"
+                raise ClientError({"Error": {"Code": code, "Message": "DADO_REMOTO_PRIVADO"}}, "Converse")
+            claim = {"passage_id": source["passage_id"], "text": literal}
+            if failure == "calculated":
+                claim["text"] = "O prazo calculado é de 32 dias."
+            payload = {"claims": [claim, claim] if failure == "duplicate" else [claim]}
+            return {
+                "stopReason": "max_tokens" if failure == "truncated" else "end_turn",
+                "output": {"message": {"role": "assistant", "content": [{"text": json.dumps(payload)}]}},
+            }
+
+    monkeypatch.setattr(boto3, "client", lambda *args, **kwargs: Model())
+    result = ask(reader, topic, "Prazo locação? Valor marciano?")
+    assert result["notice"]
+    assert {k: v for k, v in result.items() if k != "notice"} == {k: v for k, v in baseline.items() if k != "notice"}
+    assert "DADO_REMOTO_PRIVADO" not in caplog.text
+    assert literal not in caplog.text
+    assert "Valor marciano" not in caplog.text
+
+
+@pytest.mark.parametrize(
+    "question,explicit",
+    [
+        ("Prazo locação", None),
+        ("Prazo locação em 13/11/2026", None),
+        ("Prazo locação", "2026-11-12"),
+    ],
+)
+def test_generation_receives_same_effective_date_as_retrieval(reader, topic, monkeypatch, question, explicit):
+    ingest(topic, ["Locação: prazo de 30 dias."])
+    monkeypatch.setattr(get_settings(), "bedrock_model_id", "test-model")
+    received = []
+
+    def generate(body, sources):
+        received.append(body.reference_date)
+        return [Claim(text=c.excerpt, citations=[c]) for c in sources]
+
+    monkeypatch.setattr(questions, "generate_claims", generate)
+    result = ask(reader, topic, question, reference_date=explicit)
+    assert result["mode"] == "generated"
+    assert received[0].isoformat() == result["reference_date"]
